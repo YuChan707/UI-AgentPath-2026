@@ -1,0 +1,16 @@
+{
+    "workbench.colorCustomizations": {
+        "activityBar.background": "#000000",
+        "sideBar.background": "#000000",
+        "workbench.sash.hoverBorder": "#000000",
+        "editorGroup.border": "#000000",
+        "sideBar.border": "#000000",
+        "panel.border": "#000000",
+        "contrastBorder": "#17181d",
+        "editorGroupWidget.border": "#17181d",
+        "tab.border": "#000000",
+        "statusBar.border": "#000000",
+        "minimap.background": "#00000100",
+        "scrollbar.shadow": "#00000100"
+    }
+}

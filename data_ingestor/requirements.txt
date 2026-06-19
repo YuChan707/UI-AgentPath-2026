@@ -1,0 +1,14 @@
+
+marshmallow
+pydantic
+datacommons-client
+pandas
+httpx
+dapr
+tqdm
+python-dotenv
+census==0.8.20
+
+# Upload to Azure / Supabase Postgres (locations table)
+sqlalchemy[asyncio]
+asyncpg

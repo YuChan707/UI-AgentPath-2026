@@ -1,0 +1,20 @@
+# Dapr state store -> PostgreSQL to PERSIST the synthetic audience in the DB.
+#
+# The data_processor saves the audience specs (by zip_code) as state:
+#   client.save_state("statestore", zip_code, json_of_the_audience_spec)
+#
+# The connection string comes from the environment (DATABASE_URL, see containers_env/.env.example).
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+    - name: connectionString
+      value: "{env:DATABASE_URL}"
+    - name: tableName
+      value: "processor_audience_specs"
+    - name: keyPrefix
+      value: "name"

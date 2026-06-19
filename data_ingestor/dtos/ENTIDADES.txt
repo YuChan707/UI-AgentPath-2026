@@ -1,0 +1,203 @@
+==============================================================================
+ OnLooker - ENTITY DICTIONARY (DTOs / marshmallow Schemas)
+==============================================================================
+ Type conventions:
+   UUID     -> unique identifier (relations by ID)
+   String   -> free text
+   Enum     -> String restricted to a controlled vocabulary (validate.OneOf)
+   Integer  -> integer number
+   Float    -> decimal number
+   Date     -> date
+   Nested   -> nested object (another entity)
+   List[x]  -> list of elements of type x
+   Dict     -> flexible key/value map
+==============================================================================
+
+
+##############################################################################
+# 1) DATA INGESTORS  (dtos/data_ingestors.py) - INPUT ENTITIES
+##############################################################################
+
+------------------------------------------------------------------------------
+ CONTROLLED VOCABULARIES (enums)
+------------------------------------------------------------------------------
+ GENDERS                  : male | female | non_binary | other
+ EDUCATION_LEVELS         : none | primary | secondary | high_school |
+                            associate | bachelor | master | doctorate
+ INCOME_BRACKETS          : low | lower_middle | middle | upper_middle | high
+ PARTICULARITY_DIMENSIONS : gender | ethnicity | income | field
+
+
+==============================================================================
+ RAW DATA  (extracted from Data Commons)
+==============================================================================
+
+------------------------------------------------------------------------------
+ GeoPoint
+------------------------------------------------------------------------------
+ Simple geographic point. Centroid of a location.
+   latitude   : Float   (-90 to 90)
+   longitude  : Float   (-180 to 180)
+
+------------------------------------------------------------------------------
+ LocationStatistics
+------------------------------------------------------------------------------
+ Statistical metadata of a location. Separated from the identity to have a
+ single responsibility and to be able to version/nest.
+   unemployment_rate     : Float    % unemployment (0-100)
+   poverty_rate          : Float    % below poverty line (0-100)
+   cost_of_living_index  : Float    cost of living index (100 = nat. avg.)
+   median_income         : Integer  annual median income (USD)
+   avg_household_size     : Float    average household size
+   safety_index          : Float    safety index (0-100)
+
+------------------------------------------------------------------------------
+ Location
+------------------------------------------------------------------------------
+ Identity of a location (focus NY, USA). Joins identity + statistics.
+   location_id    : UUID      internal ID for relating (cheap lookup)
+   dcid           : String    Data Commons ID (e.g.: "geoId/36")
+   location_name  : String    clear name of the site
+   coordinates    : Nested    GeoPoint (centroid)
+   zip_code       : String    postal code
+   country        : String    country
+   state          : String    state
+   city           : String    city
+   statistics     : Nested    LocationStatistics
+   data_source    : String    provenance of the data (default datacommons.org)
+   last_updated   : Date      date of last update
+
+------------------------------------------------------------------------------
+ AgeRange
+------------------------------------------------------------------------------
+ Reusable age range (a range is NOT a single number).
+   min_age : Integer  (0-120)
+   max_age : Integer  (0-120)
+
+------------------------------------------------------------------------------
+ DemographicGroup
+------------------------------------------------------------------------------
+ Demographic group extracted from the raw data. Reference to Location by ID.
+   group_id          : UUID      group identity
+   group_name        : String    group name
+   location_id       : UUID      reference to Location
+   age_range         : Nested    AgeRange
+   gender            : Enum      GENDERS
+   ethnicity         : String    ethnicity
+   education_level   : Enum      EDUCATION_LEVELS
+   income_bracket    : Enum      INCOME_BRACKETS
+   median_income     : Integer   group median income (USD)
+   population_size   : Integer   group size (>= 0)
+   population_share  : Float      proportion within the location (0-1)
+
+
+==============================================================================
+ SYNTHETIC DATA  ($$ generated with LLM)
+==============================================================================
+
+------------------------------------------------------------------------------
+ SegmentParticularity
+------------------------------------------------------------------------------
+ Particularity of a segment, parametric by "dimension". Replaces the old
+ Gender/Ethnicity/Income/FieldParticularities into a single entity.
+   particularity_id : UUID      identity
+   dimension        : Enum      PARTICULARITY_DIMENSIONS
+   label            : String    e.g.: "female", "latino", "middle", "tech"
+   description      : String    explanation generated by the LLM
+   attributes       : Dict       free attributes depending on the dimension
+   traits           : List[Str]  key traits in natural language
+   generated_by     : String    traceability (default "llm")
+
+------------------------------------------------------------------------------
+ PsychographicGroup
+------------------------------------------------------------------------------
+ Psychographic group: values, interests, lifestyle, attitudes.
+   group_id            : UUID       identity
+   group_name          : String     name
+   values              : List[Str]   values
+   interests           : List[Str]   interests
+   lifestyle           : List[Str]   lifestyle
+   personality_traits  : List[Str]   personality traits
+   motivations         : List[Str]   motivations
+   attitudes           : List[Str]   attitudes
+   generated_by        : String     traceability (default "llm")
+
+------------------------------------------------------------------------------
+ BehavioralGroup
+------------------------------------------------------------------------------
+ Behavioral group: how they behave online (LLM's general knowledge).
+   group_id                    : UUID        identity
+   group_name                  : String      name
+   preferred_platforms         : List[Str]    e.g.: ["instagram", "linkedin"]
+   content_format_preferences  : List[Str]    e.g.: ["video", "carousel"]
+   peak_activity_hours         : List[Int]    peak hours (0-23)
+   avg_session_minutes         : Float        average session duration
+   engagement_style            : String       e.g.: "lurker", "creator", "sharer"
+   price_sensitivity           : Float        price sensitivity (0-1)
+   sharing_propensity          : Float        sharing propensity (0-1)
+   generated_by                : String       traceability (default "llm")
+
+
+##############################################################################
+# 2) DATA PROCESSORS  (dtos/data_processors.py) - OUTPUT ENTITIES
+##############################################################################
+
+------------------------------------------------------------------------------
+ CONTROLLED VOCABULARIES (enums)
+------------------------------------------------------------------------------
+ ASSET_TYPES : document | presentation | spreadsheet | pdf | other
+
+------------------------------------------------------------------------------
+ AudienceSegment
+------------------------------------------------------------------------------
+ Actionable audience segment = demographics + particularities + psycho +
+ behavior. Joins everything by ID references (not heavy nesting).
+   segment_id             : UUID        identity
+   label                  : String      readable name of the segment
+   location_id            : UUID        reference to Location
+   demographic_group_id   : UUID        reference to DemographicGroup
+   psychographic_group_id : UUID        reference to PsychographicGroup
+   behavioral_group_id    : UUID        reference to BehavioralGroup
+   particularity_ids      : List[UUID]  references to SegmentParticularity
+   estimated_reach        : Integer     reachable people (>= 0)
+   confidence             : Float        confidence of the assembly (0-1)
+
+------------------------------------------------------------------------------
+ ProjectAsset
+------------------------------------------------------------------------------
+ The M365 file that OnLooker analyzes.
+   asset_id           : UUID        identity
+   name               : String      file name
+   asset_type         : Enum        ASSET_TYPES
+   summary            : String      summary of the content
+   language           : String      language of the document
+   target_segment_ids : List[UUID]  target audiences (AudienceSegment)
+   source_uri         : String      location of the file (M365 / Drive)
+
+------------------------------------------------------------------------------
+ ReactionProfile
+------------------------------------------------------------------------------
+ Output of the LLM: how a segment reacts to an asset/section.
+   reaction_id            : UUID        identity
+   asset_id               : UUID        which asset it reacts to
+   segment_id             : UUID        which audience reacts
+   section                : String      section/slide/paragraph (optional)
+   sentiment_score        : Float        sentiment (0-1)
+   comprehension_score    : Float        comprehension (0-1)
+   cultural_fit_score     : Float        cultural fit (0-1)
+   engagement_likelihood  : Float        engagement probability (0-1)
+   strengths              : List[Str]    what works well
+   risks                  : List[Str]    what may fail / offend / confuse
+   recommendations        : List[Str]    how to improve it for this segment
+   confidence             : Float        confidence (0-1)
+   generated_by           : String      traceability (default "llm")
+
+==============================================================================
+ RELATIONSHIP FLOW (summary)
+==============================================================================
+ Location 1---* DemographicGroup
+ AudienceSegment --> Location, DemographicGroup, PsychographicGroup,
+                     BehavioralGroup, [SegmentParticularity]
+ ProjectAsset --> [AudienceSegment]
+ ReactionProfile --> ProjectAsset + AudienceSegment
+==============================================================================
