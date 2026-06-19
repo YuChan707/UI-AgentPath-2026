@@ -2,9 +2,8 @@
 
 OnLooker is a multi-agent AI assistant that gives real-time feedback on presentations, documents, and spoken delivery. Configure your target audience in **Project Settings** and get instant coaching, simulated audience reactions, cultural fit warnings, and speech metrics — tailored to the room you're about to walk into.
 
-**Modes**
+**Mode**
 - **Chat Box** — upload a `.pptx`, `.docx`, or `.pdf`, or type your content directly, and get AI feedback
-- **Alive** — share your screen and speak; the AI coaches you live as you present
 
 ---
 
@@ -152,14 +151,6 @@ The UI starts at **http://localhost:3000**
 | `complexity` | string | `"medium"` | `low` / `medium` / `high` |
 | `analyze` | bool | `false` | If `true`, also runs the AI agent pipeline |
 
-### Real-time streaming
-
-| Protocol | Endpoint | Description |
-|---|---|---|
-| `WebSocket` | `/ws/stream` | Live transcript streaming for Alive mode |
-
-Send `{"type":"init","persona":"executive","region":"us","focus_area":"business"}` first, then `{"type":"transcript_chunk","text":"..."}` for each chunk.
-
 ### Health
 
 | Method | Endpoint | Description |
@@ -203,13 +194,11 @@ AGENTS-LEAGUE-HACKATHON-2026/
 │   │   ├── speech.py                 ← pace / filler words / clarity (no LLM)
 │   │   ├── audience.py               ← Llama persona reactions
 │   │   ├── coaching.py               ← Llama live coaching tips
-│   │   ├── cultural.py               ← ChromaDB RAG + Llama cultural flags
-│   │   └── vision.py                 ← Llama 4 Scout screen-frame analysis
+│   │   └── cultural.py               ← ChromaDB RAG + Llama cultural flags
 │   │
 │   ├── routes/                       ← API route handlers
 │   │   ├── health.py                 ← GET /health
 │   │   ├── session.py                ← session CRUD + report generation
-│   │   ├── stream.py                 ← WebSocket /ws/stream (Alive mode)
 │   │   ├── analyze.py                ← POST /analyze/chunk (Chat Box)
 │   │   └── document.py               ← POST /document/upload
 │   │
@@ -231,15 +220,10 @@ AGENTS-LEAGUE-HACKATHON-2026/
 │   │   └── globals.css               ← design tokens + Tailwind base
 │   │
 │   ├── components/
-│   │   ├── AliveModeView.tsx         ← screen share, REC timer, video AI feed
 │   │   ├── ChatBoxMode.tsx           ← document upload + AI chat interface
 │   │   ├── DashboardView.tsx         ← analytics / engagement visualizer
 │   │   ├── ProjectSettings.tsx       ← audience context form → POST /session/start
 │   │   ├── AgentStatusPanel.tsx      ← live agent status indicators
-│   │   ├── AudienceReactionFeed.tsx  ← scrolling audience reactions
-│   │   ├── CoachingFeed.tsx          ← live coaching tip stream
-│   │   ├── CulturalFlagBanner.tsx    ← cultural mismatch warnings
-│   │   ├── ScoreDashboard.tsx        ← KPI score cards
 │   │   ├── OutlookEmailCard.tsx      ← M365 email draft output
 │   │   ├── SessionSetup.tsx          ← session configuration wizard
 │   │   ├── TeamsPanel.tsx            ← Teams-styled Q&A panel
@@ -329,7 +313,7 @@ Expected output:
 ### Step 5: Start a Session
 1. Fill in other settings (Type of Audience, Environment, Complexity)
 2. Click **"Update"**
-3. Start streaming content (chat or live mode)
+3. Start streaming content via the chat box
 4. Watch feedback appear in real-time!
 
 ## 📊 What You'll See
@@ -431,8 +415,7 @@ backend/
 │   ├── feedback.py          ← New feedback generation logic
 │   └── orchestrator.py      ← Updated to run feedback in parallel
 ├── routes/
-│   ├── feedback.py          ← New API endpoints
-│   └── stream.py            ← Updated for feedback_setting
+│   └── feedback.py          ← New API endpoints
 └── main.py                  ← Updated router registration
 
 ui-onlooker/

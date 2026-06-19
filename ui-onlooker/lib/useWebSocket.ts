@@ -69,21 +69,9 @@ export function useWebSocket() {
     setConnected(false);
   }, [setConnected]);
 
-  const sendTranscript = useCallback((text: string) => {
-    if (_ws?.readyState === WebSocket.OPEN) {
-      _ws.send(JSON.stringify({ type: "transcript_chunk", text }));
-    }
-  }, []);
-
-  const sendFrame = useCallback((imageBase64: string) => {
-    if (_ws?.readyState === WebSocket.OPEN) {
-      _ws.send(JSON.stringify({ type: "video_frame", image_base64: imageBase64 }));
-    }
-  }, []);
-
   useEffect(() => {
     return () => { /* intentionally leave singleton alive across component mounts */ };
   }, []);
 
-  return { connect, disconnect, sendTranscript, sendFrame };
+  return { connect, disconnect };
 }
