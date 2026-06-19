@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   User, BotMessageSquare as BotSquare, File as FileIcon, Bot,
-  FileText, RotateCcw, PresentationIcon, BookOpen,
+  FileText, RotateCcw, PresentationIcon, BookOpen, Mic,
 } from "lucide-react";
 import {
   useStore, AgentEvent, AudiencePayload, CoachingPayload,
@@ -185,9 +185,10 @@ function StructuredAnalysisBubble({ msg }: { msg: AnalysisMessage }) {
 // ── Main component ────────────────────────────────────────────────────────────
 interface ChatBoxModeProps {
   onSessionChange?: (active: boolean) => void;
+  onUploadOpen?: () => void;
 }
 
-export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModeProps>) {
+export default function ChatBoxMode({ onSessionChange, onUploadOpen }: Readonly<ChatBoxModeProps>) {
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
   const [botTyping, setBotTyping] = useState(false);
@@ -391,15 +392,15 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
           style={{ borderColor: "var(--color-outline-variant)" }}
         >
           <div className="flex items-center gap-[var(--sp-sm)]">
-            <Bot size={22} color="#0078d4" strokeWidth={2} />
-            <span style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-on-surface-variant)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Chat Box — AI Audience Feedback
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#107c10" }} />
+            <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-on-surface-variant)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              AI Engine: Research-V2.4
             </span>
           </div>
           <button
             onClick={handleReset}
             className="flex items-center gap-[4px] rounded border px-[var(--sp-sm)] py-[3px] transition-colors"
-            title="Clear chat + file queue — AI panel data is kept"
+            title="Clear chat + file queue"
             style={{ fontSize: 11, fontWeight: 600, color: "var(--color-on-surface-variant)", borderColor: "var(--color-outline-variant)" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-error)"; (e.currentTarget as HTMLElement).style.color = "var(--color-error)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-outline-variant)"; (e.currentTarget as HTMLElement).style.color = "var(--color-on-surface-variant)"; }}
@@ -482,15 +483,15 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
 
         {/* Input bar */}
         <div className="px-[var(--sp-md)] py-[var(--sp-sm)] border-t flex items-center gap-[var(--sp-sm)] bg-white" style={{ borderColor: "var(--color-outline-variant)" }}>
-          <input ref={fileInputRef} type="file" multiple accept=".pptx,.docx,.pdf" style={{ display: "none" }} onChange={handleFileSelect} />
+          <input ref={fileInputRef} type="file" multiple accept=".pptx,.docx,.pdf,.txt" style={{ display: "none" }} onChange={handleFileSelect} />
 
           <button
-            onClick={() => atLimit ? setFileError("Maximum 3 files — click Reset to free slots.") : fileInputRef.current?.click()}
+            onClick={() => onUploadOpen ? onUploadOpen() : (atLimit ? setFileError("Maximum 3 files — click Reset to free slots.") : fileInputRef.current?.click())}
             className="flex items-center justify-center w-8 h-8 rounded"
-            title={atLimit ? "Maximum 3 files — click Reset" : "Attach file (.pptx, .docx, .pdf)"}
+            title="Attach files"
             style={{ opacity: atLimit ? 0.5 : 1 }}
           >
-            <FileIcon size={20} color={atLimit ? "#c0c7d4" : "#0078d4"} strokeWidth={2} />
+            <FileIcon size={20} color={atLimit ? "#c0c7d4" : "#6b7280"} strokeWidth={2} />
           </button>
 
           <div className="fl-input flex-1">
@@ -499,7 +500,7 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={fileQueue.length > 0 ? `${fileQueue.length} file${fileQueue.length > 1 ? "s" : ""} queued — press Send to analyze` : "Ask about your presentation or paste a question…"}
+              placeholder={fileQueue.length > 0 ? `${fileQueue.length} file${fileQueue.length > 1 ? "s" : ""} queued — press Send to analyze` : "Type a message to Looker.AI..."}
               className="bg-transparent border-none p-0 pb-[var(--sp-xs)] focus:ring-0 w-full text-[length:var(--text-body)]"
               style={{ color: "var(--color-on-surface)", outline: "none" }}
               disabled={botTyping}
@@ -507,13 +508,21 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
           </div>
 
           <button
+            className="flex items-center justify-center w-8 h-8 rounded"
+            title="Voice input (coming soon)"
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+          >
+            <Mic size={18} color="#6b7280" strokeWidth={2} />
+          </button>
+
+          <button
             onClick={sendMessage}
             disabled={(!input.trim() && fileQueue.length === 0) || botTyping}
             className="fl-btn-primary px-[var(--sp-md)] py-[var(--sp-xs)] flex items-center gap-[var(--sp-xs)] disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ borderRadius: "var(--br-sm)" }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>send</span>
             <span style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>Send</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>send</span>
           </button>
         </div>
       </div>
