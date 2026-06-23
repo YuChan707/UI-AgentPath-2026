@@ -1,9 +1,33 @@
 # OnLooker — AI Presentation Intelligence
 
-OnLooker is a multi-agent AI assistant that gives real-time feedback on presentations, documents, and spoken delivery. Configure your target audience in **Project Settings** and get instant coaching, simulated audience reactions, cultural fit warnings, and speech metrics — tailored to the room you're about to walk into.
+OnLooker is an event-driven AI assistant that analyses presentations, documents, and written content through a Dapr microservice pipeline. Upload a `.pptx`, `.docx`, or `.pdf` in **Chat Box** mode and get structured audience simulation, content feature extraction, and a final insight report — all powered by local LLMs via Ollama, with no external API keys required.
 
-**Mode**
-- **Chat Box** — upload a `.pptx`, `.docx`, or `.pdf`, or type your content directly, and get AI feedback
+---
+
+## Architecture overview
+
+```
+Upload ──► [backend]
+              │ publishes document-submitted
+              ▼
+     [embedding-service]   ← embeds chunks into ChromaDB (nomic-embed-text)
+              │ publishes embedding-complete
+              ▼
+     [features-extractor]  ← extracts 8-12 content features (llama3.2)
+              │ publishes features-extracted
+              ▼
+     [audience-settings]   ← simulates per-feature audience reactions (llama3.2)
+              │ publishes audience-processed
+              ▼
+     [develop-analysis]    ← generates strengths / weaknesses / potential / report (llama3.2)
+              │ publishes report-ready
+              ▼
+     [backend] ◄── UI polls GET /pipeline/{run_id}/report
+```
+
+All pub/sub runs through **Redis Streams** via the Dapr `onlooker-pubsub` component.  
+Raw files are stored in **PostgreSQL bytea** (no external blob storage).  
+Vector embeddings live in **ChromaDB**.
 
 ---
 
@@ -11,454 +35,265 @@ OnLooker is a multi-agent AI assistant that gives real-time feedback on presenta
 
 | Tool | Version | Notes |
 |---|---|---|
-| Python | 3.11+ | Backend runtime |
-| Node.js | 20+ | Frontend runtime |
-| npm | 9+ | Bundled with Node.js |
-| Groq API key | — | Free at [console.groq.com](https://console.groq.com) — powers all LLM agents |
+| Docker + Docker Compose | 24+ | Runs every service |
+| Ollama | latest | Must be running on the host before `docker compose up` |
+| Node.js | 20+ | Only needed for non-Docker frontend dev |
 
-> **No Docker or PostgreSQL needed for local development.** The backend defaults to SQLite and runs ChromaDB in-process.
+> **No external API keys required.** All LLM inference is handled locally by Ollama.
+
+### Pull the required Ollama models first
+
+```bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+```
 
 ---
 
-## Quick Start
-
-### 1. Clone and configure environment variables
+## Quick Start (Docker Compose)
 
 ```bash
 git clone <repo-url>
-cd AGENTS-LEAGUE-HACKATHON-2026
+cd UI-AgentPath-2026
 
-# Copy the safe template and add your secrets
-cp .env.example .env
+docker compose up --build
 ```
 
-Open `.env` and set your Groq API key (the only required secret for local dev):
+| Service | URL |
+|---|---|
+| Frontend (Next.js) | http://localhost:3000 |
+| Backend (FastAPI) | http://localhost:8000 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+| ChromaDB | http://localhost:8001 |
+| Dapr Dashboard | http://localhost:8080 |
 
-```env
-DATABASE_URL=sqlite+aiosqlite:///./onlooker.db
-GROQ_API_KEY=your_groq_api_key_here
-MOCK_MODE=false
-ENVIRONMENT=development
-```
+The first startup seeds the PostgreSQL schema automatically via `infra/postgres/`.
 
 ---
 
-### 2. Set up the Python backend
+## Local development (without Docker)
+
+### Backend
 
 ```bash
-# Create and activate a virtual environment
+cd backend
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-
-# Install all Python dependencies
+# Windows: venv\Scripts\activate
+# macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
+
+# Minimal .env for local dev
+echo DATABASE_URL=postgresql+asyncpg://onlooker:onlooker@localhost:5432/onlooker > .env
+echo CHROMA_HOST=localhost >> .env
+echo OLLAMA_HOST=http://localhost:11434 >> .env
+
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Start the FastAPI server (from the repo root, with the venv active):
-
-```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The backend starts at **http://localhost:8000**  
-Interactive API docs: **http://localhost:8000/docs**
-
-On first start the backend automatically:
-- Creates `onlooker.db` (SQLite database)
-- Seeds ChromaDB with cultural norms
-
----
-
-### 3. Set up and run the frontend
+### Frontend
 
 ```bash
 cd ui-onlooker
-
-# Install Node dependencies
 npm install
-
-# Create the frontend env file
 echo NEXT_PUBLIC_API_URL=http://localhost:8000 > .env.local
-echo NEXT_PUBLIC_WS_URL=ws://localhost:8000 >> .env.local
-
-# Start the dev server
 npm run dev
 ```
-
-The UI starts at **http://localhost:3000**
-
----
-
-### At a glance
-
-| Service | URL | What it does |
-|---|---|---|
-| Frontend (Next.js) | http://localhost:3000 | OnLooker UI |
-| Backend (FastAPI) | http://localhost:8000 | REST API + WebSocket |
-| API Docs (Swagger) | http://localhost:8000/docs | Interactive endpoint explorer |
 
 ---
 
 ## API Endpoints
 
-### Session management
+### Document upload & pipeline
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/session/start?persona_type=&region=&focus_area=` | Create a new session |
-| `GET` | `/session/{id}` | Fetch session metadata |
-| `POST` | `/session/{id}/complete` | Mark session complete |
-| `GET` | `/session/{id}/analytics` | Aggregated KPI metrics |
-| `POST` | `/session/{id}/report` | Generate PPTX report + email draft |
-| `GET` | `/session/{id}/report/download` | Download the PPTX |
-
-### AI Analysis (new)
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/analyze/chunk` | Analyze a text chunk — returns speech metrics, audience reaction, cultural flags, and coaching tip |
-| `POST` | `/document/upload` | Upload `.pptx` / `.docx` / `.pdf` — extracts text and optionally runs AI analysis |
-
-#### `POST /analyze/chunk` — request body
-
-```json
-{
-  "text": "Your presentation content here...",
-  "session_id": "chat",
-  "persona_type": "executive",
-  "region": "us",
-  "focus_area": "business",
-  "environment": "professional",
-  "complexity": "medium"
-}
-```
+| `POST` | `/document/upload` | Upload a file — stores in PostgreSQL, fires Dapr pipeline |
+| `GET` | `/pipeline/{run_id}/status` | Poll pipeline progress (5 stages) |
+| `GET` | `/pipeline/{run_id}/report` | Fetch final report (202 if not ready) |
 
 #### `POST /document/upload` — form fields
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `file` | file | required | `.pptx`, `.docx`, or `.pdf` |
-| `session_id` | string | `"chat"` | Session to associate with |
-| `persona_type` | string | `"executive"` | `investor` / `executive` / `recruiter` / `customer` |
-| `region` | string | `"us"` | `us` / `uk` / `de` / `jp` |
-| `focus_area` | string | `"business"` | `business` / `technology` / `science` / `healthcare` / `research` |
-| `environment` | string | `"professional"` | `professional` / `casual` |
-| `complexity` | string | `"medium"` | `low` / `medium` / `high` |
-| `analyze` | bool | `false` | If `true`, also runs the AI agent pipeline |
+| `session_id` | string | `"chat"` | Session identifier |
+| `audience_environment` | string | `"Professional setting"` | Audience context |
+| `audience_size` | int | `100` | Simulated audience size |
+| `age_dstn` | string | `"25-45"` | Age distribution range |
+| `detect_strengths` | bool | `true` | Include strengths section in report |
+| `detect_weaknesses` | bool | `true` | Include weaknesses section |
+| `detect_potential` | bool | `true` | Include potential section |
+| `general_report` | bool | `true` | Include general overview |
 
-### Health
+#### Pipeline status values
+
+```
+submitted → embedding_complete → features_extracted → audience_processed → report_ready
+```
+
+### Feedback (synchronous, no pipeline)
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | DB connectivity and version check |
+| `GET` | `/feedback/settings` | List all 6 feedback personas |
+| `POST` | `/feedback/generate` | Generate structured feedback for a text snippet |
+| `GET` | `/feedback/available-perspectives` | Personas grouped by category |
 
----
+#### `POST /feedback/generate` — request body
 
-## Project Settings → AI context
+```json
+{
+  "text": "Your content here...",
+  "feedback_setting": "startup",
+  "complexity": "medium",
+  "environment": "professional"
+}
+```
 
-The **Project Settings** panel on the right side of the UI feeds context to every AI agent:
+#### 6 feedback personas
 
-| Field | Effect on AI |
-|---|---|
-| **Type of audience** | Maps to an AI persona (Business → executive, Academic → executive, Student → customer, Casual → customer) |
-| **Environment** | Tells the coaching agent whether to adapt tips for casual vs. professional delivery |
-| **Complexity** | Adjusts how the audience persona reacts (low = expects simple language, high = expects technical depth) |
-| **Area** | Sets the domain focus (Technology, Sciences, Healthcare, Research, Organization) |
-| **Location** | Maps to a regional cultural profile (UK, Japan, Germany, US) that informs cultural flag checks |
+| Key | Location | Culture | Best for |
+|---|---|---|---|
+| `academic_us` | United States | Western | Research, evidence-based content |
+| `academic_europe` | Europe | Western | Theoretical, philosophical content |
+| `business_uk` | United Kingdom | Western | Formal, diplomatic content |
+| `business_asia` | Asia | Eastern | Relationship-focused, consensus-building |
+| `startup` | Global | Innovation | Fast-paced, disruptive ideas |
+| `community` | Diverse | Multicultural | Practical, accessible content |
 
-Click **Update** to save settings and create a new backend session before sending content.
+### Analysis & session
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/analyze/chunk` | Direct coaching feedback on a text chunk |
+| `POST` | `/session/start` | Create a session |
+| `GET` | `/session/{id}` | Fetch session metadata |
+| `GET` | `/health` | DB + version check |
 
 ---
 
 ## Folder structure
 
 ```
-AGENTS-LEAGUE-HACKATHON-2026/
+UI-AgentPath-2026/
 │
-├── .env                              ← secrets (never commit)
-├── .env.example                      ← safe template with placeholders
-├── requirements.txt                  ← Python dependencies
-├── onlooker.db                       ← SQLite dev database (auto-created)
+├── docker-compose.yml               ← all services + Dapr sidecars
+├── ARCHITECTURE_CHANGES.txt         ← before/after migration reference
 │
-├── backend/                          ← FastAPI application
-│   ├── main.py                       ← app entry point, router registration
-│   ├── database.py                   ← async engine setup
+├── dapr/
+│   ├── components/
+│   │   ├── pubsub.yaml              ← Redis Streams pub/sub component
+│   │   └── statestore.yaml          ← Redis state store component
+│   └── config/
+│       └── config.yaml              ← Dapr tracing + feature flags
+│
+├── infra/
+│   └── postgres/
+│       ├── 01_init.sql              ← sessions, events, analytics tables
+│       └── 02_pipeline.sql          ← documents, pipeline_runs, status_log
+│
+├── services/                        ← Dapr microservices (Python / FastAPI)
+│   ├── embedding-service/
+│   │   └── main.py                  ← PDF/PPTX/DOCX → chunks → ChromaDB
+│   ├── features-extractor/
+│   │   └── main.py                  ← ChromaDB samples → content features (LLM)
+│   ├── audience-settings/
+│   │   └── main.py                  ← per-feature audience simulation (LLM)
+│   └── develop-analysis/
+│       └── main.py                  ← final report generation (LLM)
+│
+├── backend/                         ← FastAPI gateway
+│   ├── main.py                      ← app entry, router registration, Dapr subscribe
+│   ├── database.py                  ← async SQLAlchemy engine
 │   │
-│   ├── agents/                       ← AI agent implementations
-│   │   ├── orchestrator.py           ← fans out to all agents in parallel
-│   │   ├── speech.py                 ← pace / filler words / clarity (no LLM)
-│   │   ├── audience.py               ← Llama persona reactions
-│   │   ├── coaching.py               ← Llama live coaching tips
-│   │   └── cultural.py               ← ChromaDB RAG + Llama cultural flags
+│   ├── routes/
+│   │   ├── health.py                ← GET /health
+│   │   ├── session.py               ← session CRUD
+│   │   ├── analyze.py               ← POST /analyze/chunk (direct Ollama)
+│   │   ├── document.py              ← POST /document/upload
+│   │   ├── feedback.py              ← POST /feedback/generate
+│   │   └── pipeline.py              ← GET /pipeline/{id}/status|report
 │   │
-│   ├── routes/                       ← API route handlers
-│   │   ├── health.py                 ← GET /health
-│   │   ├── session.py                ← session CRUD + report generation
-│   │   ├── analyze.py                ← POST /analyze/chunk (Chat Box)
-│   │   └── document.py               ← POST /document/upload
-│   │
-│   ├── services/                     ← shared service layer
-│   │   ├── chroma_service.py         ← ChromaDB seed + cosine query
-│   │   ├── document_service.py       ← PPTX / DOCX / PDF text extraction
-│   │   ├── ingestion_service.py      ← event + analytics persistence
-│   │   ├── pptx_generator.py         ← branded PPTX report builder
-│   │   ├── email_service.py          ← follow-up email draft (Llama)
-│   │   └── blob_service.py           ← Azure Blob Storage (optional)
+│   ├── services/
+│   │   ├── chroma_service.py        ← ChromaDB HTTP client + seed
+│   │   ├── document_service.py      ← text extraction (pypdf, python-pptx, python-docx)
+│   │   └── pptx_generator.py        ← branded PPTX report builder
 │   │
 │   └── models/
-│       └── database.py               ← SQLAlchemy async ORM models
+│       └── database.py              ← SQLAlchemy ORM models
 │
-├── ui-onlooker/                      ← Next.js frontend
-│   ├── app/
-│   │   ├── page.tsx                  ← root page: Dashboard / Analysis views
-│   │   ├── layout.tsx                ← global fonts + providers
-│   │   └── globals.css               ← design tokens + Tailwind base
-│   │
-│   ├── components/
-│   │   ├── ChatBoxMode.tsx           ← document upload + AI chat interface
-│   │   ├── DashboardView.tsx         ← analytics / engagement visualizer
-│   │   ├── ProjectSettings.tsx       ← audience context form → POST /session/start
-│   │   ├── AgentStatusPanel.tsx      ← live agent status indicators
-│   │   ├── OutlookEmailCard.tsx      ← M365 email draft output
-│   │   ├── SessionSetup.tsx          ← session configuration wizard
-│   │   ├── TeamsPanel.tsx            ← Teams-styled Q&A panel
-│   │   └── ui/                       ← shadcn/ui primitives
-│   │       ├── badge.tsx
-│   │       ├── button.tsx
-│   │       ├── card.tsx
-│   │       ├── progress.tsx
-│   │       └── select.tsx
-│   │
-│   ├── lib/
-│   │   ├── store.ts                  ← Zustand store (session, events, metrics)
-│   │   ├── useWebSocket.ts           ← singleton WS hook (connect / sendFrame)
-│   │   └── utils.ts                  ← cn() and shared helpers
-│   │
-│   └── public/
-│       └── copilot-manifest.json     ← M365 Copilot plugin stub
-│
-├── dtos/                             ← shared Pydantic DTOs
-│   ├── analytics.py
-│   ├── audience.py
-│   ├── reports.py
-│   ├── data_ingestors.py
-│   └── data_processors.py
-│
-├── data_processor/                   ← Data Commons fetch + profile builder
-│   ├── fetch_data_commons.py
-│   └── build_profiles.py
-│
-├── data_ingestor/                    ← one-time DB seed script
-│   └── seed_database.py
-│
-└── containers_env/                   ← Docker Compose (optional for prod)
-    ├── embeds-db/                    ← ChromaDB container config
-    └── postgresql-db/                ← PostgreSQL container config
+└── ui-onlooker/                     ← Next.js 14 frontend
+    ├── app/
+    │   ├── page.tsx                 ← root page
+    │   ├── layout.tsx               ← global providers
+    │   └── globals.css              ← design tokens + Tailwind
+    │
+    ├── components/
+    │   ├── ChatBoxMode.tsx          ← document upload + chat interface
+    │   ├── AnalysisGraphPanel.tsx   ← score visualisation
+    │   ├── DashboardView.tsx        ← analytics view
+    │   └── ProjectSettings.tsx      ← audience context form
+    │
+    └── lib/
+        ├── store.ts                 ← Zustand global state
+        └── utils.ts                 ← cn() and helpers
 ```
 
 ---
 
-# Quick Start Guide - Feedback Agent
+## Dapr pub/sub topics
 
-## 🚀 Getting Started in 5 Minutes
+| Topic | Publisher | Consumer | Payload |
+|---|---|---|---|
+| `document-submitted` | backend | embedding-service | `{run_id, document_id, file_extension, audience_config, insight_flags}` |
+| `embedding-complete` | embedding-service | features-extractor | `{run_id, collection_name, chunk_count}` |
+| `features-extracted` | features-extractor | audience-settings | `{run_id, features}` |
+| `audience-processed` | audience-settings | develop-analysis | `{run_id, metrics}` |
+| `report-ready` | develop-analysis | — | `{run_id}` |
+| `pipeline-status` | all services | backend | `{run_id, stage, detail}` |
 
-### Step 1: Verify Installation
-Ensure all dependencies are installed:
-```bash
-# Backend
-pip install -r requirements.txt
+---
 
-# Frontend
-cd ui-onlooker
-npm install
-```
+## Ports reference
 
-### Step 2: Start the Backend
-```bash
-cd backend
-python -m uvicorn main:app --reload
-```
-Expected output:
-```
-Starting Onlooker API...
-Database + ChromaDB ready
-Uvicorn running on http://127.0.0.1:8000
-```
+| Service | Port |
+|---|---|
+| Frontend | 3000 |
+| Backend | 8000 |
+| Backend Dapr sidecar | 3510 |
+| ChromaDB | 8001 |
+| Ollama | 11434 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| Dapr placement | 50005 |
 
-### Step 3: Start the Frontend
-```bash
-cd ui-onlooker
-npm run dev
-```
-Expected output:
-```
-▲ Next.js ...
-- Local: http://localhost:3000
-```
+---
 
-### Step 4: Configure Feedback Settings
-1. Open http://localhost:3000
-2. Scroll to "Project Settings"
-3. Select **Feedback Perspective** dropdown
-4. Choose one of 6 perspectives:
-   - Academic (US or Europe)
-   - Business (UK, Asia, or Startup)
-   - Community
+## Customise feedback personas
 
-### Step 5: Start a Session
-1. Fill in other settings (Type of Audience, Environment, Complexity)
-2. Click **"Update"**
-3. Start streaming content via the chat box
-4. Watch feedback appear in real-time!
-
-## 📊 What You'll See
-
-When you stream content, feedback will show:
-
-```
-┌─────────────────────────────────────┐
-│ Location — Group                    │
-│ Relevance: 8/10                     │
-│                                     │
-│ Main Concern: [specific concern]    │
-│ Cultural Note: [if applicable]      │
-│ They would ask: "Question here?"    │
-│ Recommendation: [actionable advice] │
-│ Values Alignment: [assessment]      │
-└─────────────────────────────────────┘
-```
-
-## 🎯 6 Feedback Perspectives Explained
-
-| Perspective | Location | Culture | Best For |
-|-------------|----------|---------|----------|
-| **academic_us** | United States | Western | Research, evidence-based content |
-| **academic_europe** | Europe | Western | Theoretical, philosophical content |
-| **business_uk** | United Kingdom | Western | Professional, diplomatic content |
-| **business_asia** | Asia | Eastern | Relationship-focused, consensus-building |
-| **startup** | Global | Innovation | Fast-paced, disruptive ideas |
-| **community** | Diverse | Multicultural | Practical, accessible content |
-
-## 🧪 Test the API Directly
-
-### Get Available Perspectives
-```bash
-curl http://localhost:8000/feedback/available-perspectives
-```
-
-### Generate Feedback
-```bash
-curl -X POST http://localhost:8000/feedback/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "We have disrupted the market with AI-powered solutions",
-    "feedback_setting": "startup",
-    "complexity": "medium",
-    "environment": "professional"
-  }'
-```
-
-### Get All Settings
-```bash
-curl http://localhost:8000/feedback/settings
-```
-
-## 🔧 Customize Perspectives
-
-### Add a New Perspective
-
-Edit `backend/agents/feedback.py`:
+Personas are defined inline in `backend/routes/feedback.py` in the `FEEDBACK_SETTINGS` dict. Add a new key:
 
 ```python
-FEEDBACK_SETTINGS = {
-    "your_perspective": {
-        "group": "business",
-        "location": "Your City",
-        "culture": "Your Culture",
-        "communication_style": "descriptive style",
-        "values": "core values",
-        "concerns": ["concern1", "concern2", "concern3"]
-    }
+FEEDBACK_SETTINGS["your_key"] = {
+    "group":               "business",
+    "location":            "Your City",
+    "culture":             "Your Culture",
+    "communication_style": "Direct and concise",
+    "values":              "Efficiency, results",
+    "concerns":            ["ROI", "timeline", "risk"],
 }
 ```
 
-Then restart the backend and the new option appears in the dropdown!
-
-## 📈 Performance Expectations
-
-| Metric | Value |
-|--------|-------|
-| Feedback Generation Time | 1-2 seconds |
-| Parallel Execution | Yes (no latency added) |
-| Response Size | ~200-300 tokens |
-| Real-time Display | <1 second |
-
-## 🐛 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| No feedback appearing | Check backend logs, verify GROQ_API_KEY set |
-| Slow feedback | Network latency or Groq API load - wait a moment |
-| Wrong perspective | Verify feedbackSetting in dropdown, reset session |
-| Frontend can't connect | Check API_BASE in .env or ProjectSettings.tsx |
-
-## 📝 Key Files to Know
-
-```
-backend/
-├── agents/
-│   ├── feedback.py          ← New feedback generation logic
-│   └── orchestrator.py      ← Updated to run feedback in parallel
-├── routes/
-│   └── feedback.py          ← New API endpoints
-└── main.py                  ← Updated router registration
-
-ui-onlooker/
-├── components/
-│   ├── FeedbackFeed.tsx      ← New UI component
-│   └── ProjectSettings.tsx   ← Updated with perspective selector
-├── lib/
-│   ├── store.ts             ← Updated state management
-│   └── useWebSocket.ts      ← Updated WebSocket
-```
-
-## 🎓 Learn More
-
-For detailed documentation:
-- **FEEDBACK_AGENT_GUIDE.md** - Complete technical guide
-- **IMPLEMENTATION_SUMMARY.md** - What was changed and why
-
-## ✨ Key Features
-
-✅ **Real-time Feedback** - See feedback as you speak
-✅ **6 Perspectives** - Academic, Business, Community views
-✅ **Cultural Awareness** - Get cultural notes and alignment scores
-✅ **Actionable Advice** - Specific recommendations to improve
-✅ **Parallel Processing** - No performance impact
-✅ **Customizable** - Easy to add your own perspectives
-
-## 🚀 Next Steps
-
-1. **Integrate into Dashboard** - Add FeedbackFeed to your dashboard
-2. **Export Feedback** - Generate feedback reports
-3. **Compare Perspectives** - Show multiple perspectives side-by-side
-4. **Track Metrics** - Monitor feedback types and scores
-5. **Custom Perspectives** - Create domain-specific audiences
-
-## 💡 Pro Tips
-
-- Use **academic_us** for technical/research content
-- Use **business_asia** for international business pitches
-- Use **startup** for innovative or disruptive ideas
-- Use **community** to test accessibility and inclusivity
-- Adjust **complexity** to match your audience
-- Switch perspectives between practice sessions
+Restart the backend — the new persona appears automatically in `/feedback/settings` and the UI dropdown.
 
 ---
 
-**Ready to get feedback from multiple perspectives?** Start streaming now! 🎤
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Ollama model not found | Run `ollama pull llama3.2` and `ollama pull nomic-embed-text` on the host |
+| Pipeline stalls at `submitted` | Check embedding-service logs: `docker compose logs embedding-service` |
+| Dapr sidecar not starting | Ensure `dapr-placement` container is healthy before other services |
+| ChromaDB connection refused | Wait ~10 s after `docker compose up` for ChromaDB to initialise |
+| PostgreSQL init fails | Delete the `pgdata` volume and restart: `docker compose down -v && docker compose up` |

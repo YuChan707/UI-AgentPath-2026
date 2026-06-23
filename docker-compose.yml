@@ -1,20 +1,29 @@
-# OnLooker — full project stack.
-#
-#   make up           # infra (postgres, chromadb, ollama, redis) + backend + ui
-#   make ingest       # run data_ingestor once  (Census -> locations table)
-#   make process      # run data_processor once (synthetic audience)
-#
-# By default the apps talk to the LOCAL `postgres` service (init.sql is applied
-# automatically on first start). To target Azure/Supabase instead, comment out
-# the `postgres` service + its depends_on, and drop the DATABASE_* overrides so
-# the apps read DATABASE_POOL_URL from your .env.
 version: '3.9'
+
+# OnLooker AI — Full Microservices Stack
+# Open-source only: PostgreSQL · Redis · ChromaDB · Ollama · Dapr
+# No Azure, no proprietary cloud services.
+#
+#   docker compose up                          # full stack
+#   docker compose --profile jobs run data_ingestor   # seed locations
+#   docker compose --profile jobs run data_processor  # build audience profiles
 
 networks:
   net:
     driver: bridge
+
+volumes:
+  pgdata:
+  ollama_data:
+  chroma-data:
+  redis-data:
+
 services:
-  # ----------------------------------------------------------------- infra ---
+
+  # ─────────────────────────────────────────────────────────────────
+  # INFRASTRUCTURE
+  # ─────────────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -25,13 +34,30 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Auto-create every entity table on first init.
-      - ./containers_env/postgresql-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./containers_env/postgresql-db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./infra/postgres/pipeline_schema.sql:/docker-entrypoint-initdb.d/02_pipeline.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d onlooker"]
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - net
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   chromadb:
     image: chromadb/chroma:latest
@@ -40,23 +66,15 @@ services:
     volumes:
       - chroma-data:/data
     environment:
-      - CHROMA_OPEN_TELEMETRY__ENDPOINT=${CHROMA_OPEN_TELEMETRY__ENDPOINT}
-      # - CHROMA_OPEN_TELEMETRY__SERVICE_NAME=${CHROMA_OPEN_TELEMETRY__SERVICE_NAME}
-      # - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}
-    restart: unless-stopped # possible values are: "no", always", "on-failure", "unless-stopped"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - net
-
-
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
 
   ollama:
     image: ollama/ollama:latest
@@ -64,9 +82,26 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    # Pull the model once it is up:  make model-pull
+    environment:
+      OLLAMA_NUM_PARALLEL: "4"
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      OLLAMA_MAX_QUEUE: "512"
+    networks:
+      - net
 
-  # ------------------------------------------------------------------ apps ---
+  # ── Dapr Placement (actor service locator) ───────────────────────
+  dapr-placement:
+    image: daprio/dapr:1.13.0
+    command: ["./placement", "--port", "50005", "--log-level", "warn"]
+    ports:
+      - "50005:50005"
+    networks:
+      - net
+
+  # ─────────────────────────────────────────────────────────────────
+  # API GATEWAY (existing backend — document storage + session mgmt)
+  # ─────────────────────────────────────────────────────────────────
+
   backend:
     build:
       context: .
@@ -79,13 +114,223 @@ services:
       DB_SSL: disable
       CHROMA_HOST: chromadb
       CHROMA_PORT: "8000"
+      DAPR_HTTP_PORT: "3510"
     ports:
       - "8000:8000"
+    networks:
+      - net
     depends_on:
       postgres:
         condition: service_healthy
       chromadb:
         condition: service_started
+      redis:
+        condition: service_healthy
+
+  backend-dapr:
+    image: daprio/daprd:1.13.0
+    command:
+      - "./daprd"
+      - "--app-id=backend"
+      - "--app-port=8000"
+      - "--dapr-http-port=3510"
+      - "--dapr-grpc-port=50010"
+      - "--placement-host-address=dapr-placement:50005"
+      - "--components-path=/components"
+      - "--config=/config/config.yaml"
+      - "--log-level=warn"
+    volumes:
+      - ./dapr/components:/components:ro
+      - ./dapr/config:/config:ro
+    network_mode: "service:backend"
+    depends_on:
+      - backend
+      - dapr-placement
+
+  # ─────────────────────────────────────────────────────────────────
+  # MICROSERVICE — embedding-service
+  # Receives document-submitted → extracts text → vectorizes → ChromaDB
+  # ─────────────────────────────────────────────────────────────────
+
+  embedding-service:
+    build:
+      context: ./services/embedding-service
+    container_name: embedding-service
+    environment:
+      APP_PORT: "8081"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8000"
+      OLLAMA_HOST: http://ollama:11434
+      EMBED_MODEL: nomic-embed-text
+      DAPR_HTTP_PORT: "3500"
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  embedding-service-dapr:
+    image: daprio/daprd:1.13.0
+    container_name: embedding-service-dapr
+    command:
+      - "./daprd"
+      - "--app-id=embedding-service"
+      - "--app-port=8081"
+      - "--dapr-http-port=3500"
+      - "--dapr-grpc-port=50001"
+      - "--placement-host-address=dapr-placement:50005"
+      - "--components-path=/components"
+      - "--config=/config/config.yaml"
+      - "--log-level=warn"
+    volumes:
+      - ./dapr/components:/components:ro
+      - ./dapr/config:/config:ro
+    network_mode: "service:embedding-service"
+    depends_on:
+      - embedding-service
+      - dapr-placement
+
+  # ─────────────────────────────────────────────────────────────────
+  # MICROSERVICE — features-extractor
+  # Reads vectors from ChromaDB → LLM extracts key features
+  # ─────────────────────────────────────────────────────────────────
+
+  features-extractor:
+    build:
+      context: ./services/features-extractor
+    container_name: features-extractor
+    environment:
+      APP_PORT: "8082"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8000"
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: llama3.2
+      DAPR_HTTP_PORT: "3501"
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  features-extractor-dapr:
+    image: daprio/daprd:1.13.0
+    container_name: features-extractor-dapr
+    command:
+      - "./daprd"
+      - "--app-id=features-extractor"
+      - "--app-port=8082"
+      - "--dapr-http-port=3501"
+      - "--dapr-grpc-port=50002"
+      - "--placement-host-address=dapr-placement:50005"
+      - "--components-path=/components"
+      - "--config=/config/config.yaml"
+      - "--log-level=warn"
+    volumes:
+      - ./dapr/components:/components:ro
+      - ./dapr/config:/config:ro
+    network_mode: "service:features-extractor"
+    depends_on:
+      - features-extractor
+      - dapr-placement
+
+  # ─────────────────────────────────────────────────────────────────
+  # MICROSERVICE — audience-settings
+  # Receives features → parallel Ollama simulations → metrics
+  # ─────────────────────────────────────────────────────────────────
+
+  audience-settings:
+    build:
+      context: ./services/audience-settings
+    container_name: audience-settings
+    environment:
+      APP_PORT: "8083"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: llama3.2
+      DAPR_HTTP_PORT: "3502"
+      OLLAMA_NUM_PARALLEL: "4"
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  audience-settings-dapr:
+    image: daprio/daprd:1.13.0
+    container_name: audience-settings-dapr
+    command:
+      - "./daprd"
+      - "--app-id=audience-settings"
+      - "--app-port=8083"
+      - "--dapr-http-port=3502"
+      - "--dapr-grpc-port=50003"
+      - "--placement-host-address=dapr-placement:50005"
+      - "--components-path=/components"
+      - "--config=/config/config.yaml"
+      - "--log-level=warn"
+    volumes:
+      - ./dapr/components:/components:ro
+      - ./dapr/config:/config:ro
+    network_mode: "service:audience-settings"
+    depends_on:
+      - audience-settings
+      - dapr-placement
+
+  # ─────────────────────────────────────────────────────────────────
+  # MICROSERVICE — develop-analysis
+  # Receives audience metrics → generates report per enabled flags
+  # ─────────────────────────────────────────────────────────────────
+
+  develop-analysis:
+    build:
+      context: ./services/develop-analysis
+    container_name: develop-analysis
+    environment:
+      APP_PORT: "8084"
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: llama3.2
+      DAPR_HTTP_PORT: "3503"
+    networks:
+      - net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  develop-analysis-dapr:
+    image: daprio/daprd:1.13.0
+    container_name: develop-analysis-dapr
+    command:
+      - "./daprd"
+      - "--app-id=develop-analysis"
+      - "--app-port=8084"
+      - "--dapr-http-port=3503"
+      - "--dapr-grpc-port=50004"
+      - "--placement-host-address=dapr-placement:50005"
+      - "--components-path=/components"
+      - "--config=/config/config.yaml"
+      - "--log-level=warn"
+    volumes:
+      - ./dapr/components:/components:ro
+      - ./dapr/config:/config:ro
+    network_mode: "service:develop-analysis"
+    depends_on:
+      - develop-analysis
+      - dapr-placement
+
+  # ─────────────────────────────────────────────────────────────────
+  # FRONTEND
+  # ─────────────────────────────────────────────────────────────────
 
   ui-onlooker:
     build:
@@ -95,11 +340,15 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
+    networks:
+      - net
     depends_on:
       - backend
 
-  # ------------------------------------------------------- one-shot jobs ----
-  # Run on demand (profile "jobs"): `make ingest`, `make process`.
+  # ─────────────────────────────────────────────────────────────────
+  # ONE-SHOT JOBS (run with: docker compose --profile jobs up <name>)
+  # ─────────────────────────────────────────────────────────────────
+
   data_ingestor:
     build:
       context: ./data_ingestor
@@ -117,6 +366,8 @@ services:
       postgres:
         condition: service_healthy
     restart: "no"
+    networks:
+      - net
 
   data_processor:
     build:
@@ -138,9 +389,5 @@ services:
       ollama:
         condition: service_started
     restart: "no"
-
-volumes:
-  pgdata:
-  ollama_data:
-  chroma-data:
-    driver: local
+    networks:
+      - net

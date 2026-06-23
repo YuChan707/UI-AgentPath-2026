@@ -103,7 +103,6 @@ export interface SessionConfig {
 interface Store {
   sessionId: string | null;
   sessionConfig: SessionConfig;
-  isConnected: boolean;
   events: AgentEvent[];
   latestSpeech: SpeechPayload | null;
   latestAudience: AudiencePayload | null;
@@ -118,7 +117,6 @@ interface Store {
 
   setSessionId: (id: string) => void;
   setSessionConfig: (config: Partial<SessionConfig>) => void;
-  setConnected: (connected: boolean) => void;
   addEvent: (agent: AgentEventType, payload: AgentEvent["payload"]) => void;
   setDocumentAnalysis: (payload: DocumentAnalysisPayload | null) => void;
   setFilename: (name: string | null) => void;
@@ -145,7 +143,6 @@ export const useStore = create<Store>((set) => ({
     audienceMaxAge: 45,
     audienceAmount: 100,
   },
-  isConnected: false,
   events: [],
   latestSpeech: null,
   latestAudience: null,
@@ -161,7 +158,6 @@ export const useStore = create<Store>((set) => ({
   setSessionId: (id) => set({ sessionId: id }),
   setSessionConfig: (config) =>
     set((s) => ({ sessionConfig: { ...s.sessionConfig, ...config } })),
-  setConnected: (connected) => set({ isConnected: connected }),
 
   addEvent: (agent, payload) => {
     const event: AgentEvent = { id: ++_counter, agent, payload, timestamp: Date.now() };
@@ -194,7 +190,6 @@ export const useStore = create<Store>((set) => ({
   clearSession: () =>
     set({
       sessionId: null,
-      isConnected: false,
       events: [],
       latestSpeech: null,
       latestAudience: null,

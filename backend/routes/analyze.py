@@ -1,8 +1,11 @@
+import os
 from fastapi import APIRouter
 from pydantic import BaseModel
-from agents.orchestrator import Orchestrator
 
 router = APIRouter(tags=["analyze"])
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+LLM_MODEL   = os.getenv("LLM_MODEL", "llama3.2")
 
 
 class ChunkRequest(BaseModel):
@@ -22,23 +25,42 @@ class ChunkRequest(BaseModel):
 @router.post("/analyze/chunk")
 async def analyze_chunk(req: ChunkRequest):
     """
-    Analyze a text chunk through the AI agent pipeline.
-    Returns speech metrics, audience reaction, cultural flags, coaching tip, and feedback.
+    Quick chat-box analysis of a text chunk via Ollama.
+    Returns a lightweight feedback event — for full pipeline analysis, use /document/upload.
     """
-    orch = Orchestrator()
-    orch.configure(
-        session_id=req.session_id,
-        persona=req.persona_type,
-        region=req.region,
-        focus_area=req.focus_area,
-        environment=req.environment,
-        complexity=req.complexity,
-        feedback_setting=req.feedback_setting,
-        audience_min_age=req.audience_min_age,
-        audience_max_age=req.audience_max_age,
-        audience_amount=req.audience_amount,
-    )
     events: list[dict] = []
-    async for event in orch.process(req.text):
-        events.append(event)
+
+    try:
+        import ollama as _ollama
+        client = _ollama.Client(host=OLLAMA_HOST)
+        prompt = (
+            f"You are a presentation coach for a {req.persona_type} audience "
+            f"in a {req.environment} {req.focus_area} setting.\n\n"
+            f"Analyze this content and give brief, actionable feedback:\n\n{req.text[:1500]}\n\n"
+            "Return JSON with keys: "
+            '"coaching_tip" (string), "clarity_score" (0-100), "engagement_score" (0-100), '
+            '"key_strength" (string), "improvement" (string).'
+        )
+        resp = client.chat(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            format="json",
+            options={"temperature": 0.3},
+        )
+        import json
+        parsed = json.loads(resp["message"]["content"])
+        events.append({"agent": "coaching", "payload": parsed})
+    except Exception:
+        # Ollama not available in local dev without Docker — return empty
+        events.append({
+            "agent": "coaching",
+            "payload": {
+                "coaching_tip":      "Analysis pending — start the Ollama service for live feedback.",
+                "clarity_score":     0,
+                "engagement_score":  0,
+                "key_strength":      "",
+                "improvement":       "",
+            },
+        })
+
     return {"events": events}

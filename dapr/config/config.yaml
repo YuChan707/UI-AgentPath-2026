@@ -1,0 +1,10 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: onlooker-config
+spec:
+  tracing:
+    samplingRate: "1"
+  features:
+    - name: PubSubRouting
+      enabled: true

@@ -72,9 +72,13 @@ const DOC_TYPE_META = {
   other:        { label: "Document",     Icon: FileText,          note: "" },
 };
 
-const SCORE_COLOR = (n: number) => n >= 75 ? "#107c10" : n >= 50 ? "#f59e0b" : "#c4362c";
+function scoreColor(n: number): string {
+  if (n >= 75) return "#107c10";
+  if (n >= 50) return "#f59e0b";
+  return "#c4362c";
+}
 
-function StructuredAnalysisBubble({ msg }: { msg: AnalysisMessage }) {
+function StructuredAnalysisBubble({ msg }: Readonly<{ msg: AnalysisMessage }>) {
   const { analysis, docSlot, filePrefix: prefix, audienceLabel, environmentLabel, complexityLabel } = msg;
   const meta = DOC_TYPE_META[analysis.doc_type] ?? DOC_TYPE_META.other;
   const { audience, environment, complexity } = analysis.success_scores;
@@ -161,10 +165,10 @@ function StructuredAnalysisBubble({ msg }: { msg: AnalysisMessage }) {
               <div className="flex-1 h-2 rounded-full" style={{ background: "var(--color-surface-high)", minWidth: 0 }}>
                 <div
                   className="h-2 rounded-full transition-all"
-                  style={{ width: `${value}%`, background: SCORE_COLOR(value) }}
+                  style={{ width: `${value}%`, background: scoreColor(value) }}
                 />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 800, color: SCORE_COLOR(value), minWidth: 36, textAlign: "right" }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: scoreColor(value), minWidth: 36, textAlign: "right" }}>
                 {value}%
               </span>
             </div>
@@ -270,16 +274,10 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
       const form = new FormData();
       form.append("file", item.file);
       form.append("session_id", sessionId ?? "chat");
-      form.append("persona_type", sessionConfig.personaType);
-      form.append("region", sessionConfig.region);
-      form.append("focus_area", sessionConfig.focusArea);
-      form.append("environment", sessionConfig.environment);
-      form.append("complexity", sessionConfig.complexity);
-      form.append("feedback_setting", sessionConfig.feedbackSetting ?? "academic_us");
-      form.append("audience_min_age", String(sessionConfig.audienceMinAge ?? 18));
-      form.append("audience_max_age", String(sessionConfig.audienceMaxAge ?? 45));
-      form.append("audience_amount", String(sessionConfig.audienceAmount ?? 100));
-      form.append("analyze", "true");
+      // Map legacy sessionConfig fields to the new audience schema
+      form.append("audience_environment", sessionConfig.environment);
+      form.append("audience_size", String(sessionConfig.audienceAmount ?? 100));
+      form.append("age_dstn", `${sessionConfig.audienceMinAge ?? 18}-${sessionConfig.audienceMaxAge ?? 45}`);
 
       const res = await fetch(`${API_BASE}/document/upload`, { method: "POST", body: form });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -364,13 +362,16 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
     const toAdd = incoming.slice(0, available);
     toAdd.forEach((f) => enqueueFile(f));
     if (incoming.length > available) {
-      setFileError(`Only ${available} slot${available !== 1 ? "s" : ""} free — ${incoming.length - available} file${incoming.length - available !== 1 ? "s" : ""} skipped.`);
+      setFileError(`Only ${available} slot${available === 1 ? "" : "s"} free — ${incoming.length - available} file${incoming.length - available === 1 ? "" : "s"} skipped.`);
     }
     if (toAdd.length > 0) onSessionChange?.(true);
   };
 
   const atLimit = fileQueue.length >= 3;
-  const hasAnalysis = !!latestDocumentAnalysis;
+  const hasAnalysis = latestDocumentAnalysis !== null;
+  const filePlaceholder = fileQueue.length > 0
+    ? `${fileQueue.length} file${fileQueue.length === 1 ? "" : "s"} queued — press Send to analyze`
+    : "Ask about your presentation or paste a question…";
 
   return (
     <section className="fl-card w-full flex overflow-hidden" style={{ height: "100%", minHeight: 480 }}>
@@ -499,7 +500,7 @@ export default function ChatBoxMode({ onSessionChange }: Readonly<ChatBoxModePro
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={fileQueue.length > 0 ? `${fileQueue.length} file${fileQueue.length > 1 ? "s" : ""} queued — press Send to analyze` : "Ask about your presentation or paste a question…"}
+              placeholder={filePlaceholder}
               className="bg-transparent border-none p-0 pb-[var(--sp-xs)] focus:ring-0 w-full text-[length:var(--text-body)]"
               style={{ color: "var(--color-on-surface)", outline: "none" }}
               disabled={botTyping}

@@ -1,0 +1,24 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: onlooker-pubsub
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "redis:6379"
+    - name: redisPassword
+      value: ""
+    - name: consumerID
+      value: "{appID}"
+    - name: enableTLS
+      value: "false"
+    # Streams-based delivery — messages are acknowledged only after the handler
+    # returns {"status": "SUCCESS"}, giving us at-least-once semantics.
+    - name: processingTimeout
+      value: "60s"
+    - name: redeliveryDelay
+      value: "5s"
+    - name: maxLen
+      value: "10000"

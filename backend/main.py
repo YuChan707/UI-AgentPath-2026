@@ -1,5 +1,7 @@
-import os, sys
+import os
+import sys
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -11,10 +13,11 @@ from models.database import init_db
 from services.chroma_service import chroma
 from routes.health import router as health_router
 from routes.session import router as session_router
-from routes.stream import router as stream_router
 from routes.analyze import router as analyze_router
 from routes.document import router as document_router
 from routes.feedback import router as feedback_router
+from routes.pipeline import router as pipeline_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,11 +28,29 @@ async def lifespan(app: FastAPI):
     yield
     print("Shutting down")
 
-app = FastAPI(title="Onlooker API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+app = FastAPI(title="Onlooker API", version="0.2.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(health_router)
 app.include_router(session_router)
-app.include_router(stream_router)
 app.include_router(analyze_router)
 app.include_router(document_router)
 app.include_router(feedback_router)
+app.include_router(pipeline_router)
+
+
+# Tells the Dapr sidecar which topics this gateway subscribes to
+@app.get("/dapr/subscribe")
+def dapr_subscribe():
+    return [
+        {
+            "pubsubname": "onlooker-pubsub",
+            "topic":      "pipeline-status",
+            "route":      "/pipeline/status-ingest",
+        }
+    ]
