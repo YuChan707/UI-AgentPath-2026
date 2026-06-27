@@ -1,0 +1,15 @@
+# UiPath agent (LangGraph) + Dapr subscriber runtime — all local, no cloud.
+uipath-langchain
+langgraph
+langchain-openai
+
+# Dapr subscriber + IO
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+python-dotenv
+
+# Vector store + DB
+chromadb
+asyncpg

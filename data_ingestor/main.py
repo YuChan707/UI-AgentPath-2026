@@ -213,8 +213,8 @@ def persist_locations(_logger, locations) -> list[dict]:
     """Persists each LocationEntity as JSON per zip_code + an index.
 
     Runs when it finishes processing ALL groups by zip_code. Dumps the
-    Marshmallow-validated entity (.dump) to preserve the contract. Returns the
-    dumped records so they can also be uploaded to the cloud DB.
+    Marshmallow-validated entity (.dump) to preserve the contract. The JSON
+    output is the source of truth consumed later by the data_processor.
     """
     LOCATIONS_DIR.mkdir(parents=True, exist_ok=True)
     records = []
@@ -243,35 +243,6 @@ def persist_locations(_logger, locations) -> list[dict]:
     return records
 
 
-async def upload_to_cloud(_logger, records: list[dict]) -> None:
-    """Uploads the locations to the Azure/Supabase Postgres `locations` table.
-
-    Controlled by INGESTOR_UPLOAD (default "auto"): uploads when a DB URL is
-    configured, skips with a warning otherwise. Set INGESTOR_UPLOAD=0 to disable.
-    A DB failure is logged but does NOT abort the ingestion (JSON is already saved).
-    """
-    try:
-        from db import database_configured, upload_locations
-    except ImportError:  # when run as `python -m data_ingestor.main` from repo root
-        from data_ingestor.db import database_configured, upload_locations
-
-    flag = os.getenv("INGESTOR_UPLOAD", "auto").lower()
-    if flag in ("0", "false", "no", "off"):
-        _logger.info("DB upload disabled (INGESTOR_UPLOAD=%s).", flag)
-        return
-    if not database_configured():
-        _logger.warning(
-            "No DATABASE_URL/DATABASE_POOL_URL set -> skipping Azure upload "
-            "(locations are saved as JSON). See containers_env/.env.example."
-        )
-        return
-    try:
-        n = await upload_locations(records)
-        _logger.info("Uploaded %d locations to the cloud Postgres (locations table).", n)
-    except Exception as exc:  # noqa: BLE001 - do not lose the run over a DB hiccup
-        _logger.error("Azure upload failed (%s: %s). JSON copy is intact.", type(exc).__name__, exc)
-
-
 async def main(_logger) -> None:
     _logger.info("Initializing Census Bureau Client")
     dc_client = data_extractor_client()
@@ -282,9 +253,9 @@ async def main(_logger) -> None:
     resultant = await process_sitemaps(_logger, dc_client, sitemap_zip_codes)
     _logger.info(f"Process finished. {len(resultant)} Marshmallow entities ready.")
 
-    # Finished processing all groups by zip_code -> persist locally + upload to Azure.
-    records = persist_locations(_logger, resultant)
-    await upload_to_cloud(_logger, records)
+    # Finished processing all groups by zip_code -> persist locally as JSON
+    # (the source of truth the data_processor consumes).
+    persist_locations(_logger, resultant)
 
 
 if __name__ == "__main__":

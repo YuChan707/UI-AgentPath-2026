@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+# UiPath generated artifacts
+entry-points.json
+bindings.json
+agent.mermaid
+*.nupkg
+.uipath/

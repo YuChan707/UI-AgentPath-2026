@@ -1,9 +1,9 @@
 # data_processor
 
 Converts the real RAW data (Census, by `zip_code`) into **synthetic online
-behavior audience groups**, using a **dockerized Llama 3B** via Dapr and
-grounding from **Foundry IQ**. The outputs are **scores in ranges**
-(min / expected / max) of reaction.
+behavior audience groups**, using a **dockerized Llama (llama3.1)** via Dapr and
+**local grounding over the real Census statistics**. The outputs are **scores in
+ranges** (min / expected / max) of reaction.
 
 ## Pipeline (per location)
 
@@ -23,7 +23,7 @@ grounding from **Foundry IQ**. The outputs are **scores in ranges**
 | `__main__.py` | CLI (`python -m data_processor`) |
 | `prompts.py` | Prompts as **entities** `PromptSpec` (`details`, `description_input`, `expected_output`, validator schema, mock) |
 | `llm_client.py` | `LlamaClient`: Dapr transport -> HTTP (OpenAI-compatible) -> mock |
-| `foundry_iq.py` | Grounding layer: remote Foundry IQ retrieval or local evidence (real Census) |
+| `grounding.py` | Local grounding layer: builds an evidence block from the real Census statistics |
 | `persistence.py` | JSON persistence (seam for Postgres/Chroma/Dapr state) |
 | `build_profiles.py`, `fetch_data_commons.py` | Profile / Data Commons utilities |
 | `components/` | Dapr: `conversation-llama.yaml` (model) + `statestore.yaml` (Postgres) |
@@ -38,5 +38,5 @@ dapr run --app-id data-processor --resources-path data_processor/components -- \
   python -m data_processor --transport dapr
 ```
 
-Variables: `LLM_TRANSPORT`, `LLAMA_MODEL`, `LLAMA_BASE_URL`, `DAPR_LLM_COMPONENT`,
-`FOUNDRY_IQ_*`. See the diagram in [`../docs/workflow.md`](../docs/workflow.md).
+Variables: `LLM_TRANSPORT`, `LLAMA_MODEL`, `LLAMA_BASE_URL`, `DAPR_LLM_COMPONENT`.
+See the diagram in [`../docs/workflow.md`](../docs/workflow.md).

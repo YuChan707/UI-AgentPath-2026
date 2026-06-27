@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "features-extractor": "agent.py:graph"
+  },
+  "env": ".env"
+}

@@ -1,6 +1,11 @@
 .idea/
 .git/
+.gitignore
 .venv/
+venv/
 **/__pycache__/
 *.pyc
 output/
+.env
+README.md
+Makefile

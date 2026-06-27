@@ -1,0 +1,14 @@
+# Dapr Redis pub/sub for the UI's own sidecar. The UI publishes document.uploaded
+# (and reads progress) through this bus; it never talks to an LLM directly.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "{env:REDIS_HOST}"
+    - name: redisPassword
+      value: ""

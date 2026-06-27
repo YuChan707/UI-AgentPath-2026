@@ -3,7 +3,7 @@
 # The data_ingestor saves each Location (by zip_code) as a state item:
 #   client.save_state("statestore", zip_code, json_of_the_location)
 #
-# The connection string comes from the environment (DATABASE_URL, see containers_env/.env.example).
+# The connection string comes from the environment (DATABASE_URL).
 apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:

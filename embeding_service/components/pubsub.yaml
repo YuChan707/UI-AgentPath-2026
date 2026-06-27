@@ -1,0 +1,16 @@
+# Dapr pub/sub bus (Redis) shared by all OnLooker product-pipeline services.
+# Component name "pubsub" is what services reference when publishing/subscribing.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    # Compose sets REDIS_HOST=redis:6379 on the sidecar; for host `dapr run`
+    # export REDIS_HOST=localhost:6379 first.
+    - name: redisHost
+      value: "{env:REDIS_HOST}"
+    - name: redisPassword
+      value: ""

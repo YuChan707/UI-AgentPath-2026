@@ -1,18 +1,16 @@
 # OnLooker — full project stack.
 #
-#   make up           # infra (postgres, chromadb, ollama, redis) + backend + ui
-#   make ingest       # run data_ingestor once  (Census -> locations table)
+#   make up           # infra (postgres, chromadb, ollama, redis) + ui
+#   docker compose --profile pipeline up   # + product-pipeline microservices
+#   make ingest       # run data_ingestor once  (Census -> locations JSON)
 #   make process      # run data_processor once (synthetic audience)
 #
 # By default the apps talk to the LOCAL `postgres` service (init.sql is applied
-# automatically on first start). To target Azure/Supabase instead, comment out
-# the `postgres` service + its depends_on, and drop the DATABASE_* overrides so
-# the apps read DATABASE_POOL_URL from your .env.
-version: '3.9'
-
-networks:
-  net:
-    driver: bridge
+# automatically on first start). To target a different Postgres, override the
+# DATABASE_URL of each service.
+#
+# All services share Compose's default network so they reach each other by name
+# (postgres, chromadb, ollama, redis, embeding-service, ...).
 services:
   # ----------------------------------------------------------------- infra ---
   postgres:
@@ -26,7 +24,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Auto-create every entity table on first init.
-      - ./containers_env/postgresql-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d onlooker"]
       interval: 5s
@@ -49,14 +47,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - net
 
-
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
+  # Dapr pub/sub broker for the product pipeline (embeding-service, ...).
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
 
   ollama:
     image: ollama/ollama:latest
@@ -67,36 +64,17 @@ services:
     # Pull the model once it is up:  make model-pull
 
   # ------------------------------------------------------------------ apps ---
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
-      DATABASE_POOL_URL: ""
-      DB_SSL: disable
-      CHROMA_HOST: chromadb
-      CHROMA_PORT: "8000"
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      chromadb:
-        condition: service_started
-
+  # UI (I/O only). It stores documents in Postgres and publishes Dapr events;
+  # the product-pipeline microservices (profile "pipeline") do the work.
   ui-onlooker:
     build:
       context: ./ui-onlooker
       dockerfile: Dockerfile
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
 
   # ------------------------------------------------------- one-shot jobs ----
   # Run on demand (profile "jobs"): `make ingest`, `make process`.
@@ -108,20 +86,12 @@ services:
     env_file:
       - .env
       - data_ingestor/.env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/onlooker
-      DATABASE_POOL_URL: ""
-      DB_SSL: disable
-      INGESTOR_UPLOAD: "auto"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # Writes locations as JSON (data_ingestor/data/locations/), consumed by data_processor.
     restart: "no"
 
   data_processor:
     build:
-      context: .
-      dockerfile: data_processor/Dockerfile
+      context: ./data_processor
     profiles: ["jobs"]
     env_file:
       - .env
@@ -131,13 +101,193 @@ services:
       DB_SSL: disable
       LLM_TRANSPORT: http
       LLAMA_BASE_URL: http://ollama:11434/v1
-      LLAMA_MODEL: llama3.2:3b
+      LLAMA_MODEL: llama3.1
     depends_on:
       postgres:
         condition: service_healthy
       ollama:
         condition: service_started
     restart: "no"
+
+  # ----------------------------------------------- product pipeline (Dapr) ---
+  # Start with:  docker compose --profile pipeline up --build
+  embeding-service:
+    build:
+      context: ./embeding_service
+    profiles: ["pipeline"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+      OLLAMA_NUM_PARALLEL: ""
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8000"
+      PUBSUB_NAME: pubsub
+      DAPR_HTTP_PORT: "3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # Dapr sidecar for embeding-service (shares its network namespace).
+  embeding-service-dapr:
+    image: daprio/daprd:1.14.4
+    profiles: ["pipeline"]
+    command:
+      - "./daprd"
+      - "--app-id"
+      - "embeding-service"
+      - "--app-port"
+      - "8100"
+      - "--dapr-http-port"
+      - "3500"
+      - "--resources-path"
+      - "/components"
+    environment:
+      REDIS_HOST: redis:6379
+    volumes:
+      - ./embeding_service/components:/components
+    network_mode: "service:embeding-service"
+    depends_on:
+      - embeding-service
+      - redis
+
+  # features-extractor — UiPath LangGraph agent (Ollama) over Dapr.
+  features-extractor:
+    build:
+      context: ./features_extractor
+    profiles: ["pipeline"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      OLLAMA_MODEL: llama3.1
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8000"
+      PUBSUB_NAME: pubsub
+      DAPR_HTTP_PORT: "3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  features-extractor-dapr:
+    image: daprio/daprd:1.14.4
+    profiles: ["pipeline"]
+    command:
+      - "./daprd"
+      - "--app-id"
+      - "features-extractor"
+      - "--app-port"
+      - "8101"
+      - "--dapr-http-port"
+      - "3500"
+      - "--resources-path"
+      - "/components"
+    environment:
+      REDIS_HOST: redis:6379
+    volumes:
+      - ./features_extractor/components:/components
+    network_mode: "service:features-extractor"
+    depends_on:
+      - features-extractor
+      - redis
+
+  # audience-settings — UiPath LangGraph reaction agent (Ollama) over Dapr.
+  audience-settings:
+    build:
+      context: ./audience_settings
+    profiles: ["pipeline"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      OLLAMA_MODEL: llama3.1
+      OLLAMA_NUM_PARALLEL: ""
+      PUBSUB_NAME: pubsub
+      DAPR_HTTP_PORT: "3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  audience-settings-dapr:
+    image: daprio/daprd:1.14.4
+    profiles: ["pipeline"]
+    command:
+      - "./daprd"
+      - "--app-id"
+      - "audience-settings"
+      - "--app-port"
+      - "8102"
+      - "--dapr-http-port"
+      - "3500"
+      - "--resources-path"
+      - "/components"
+    environment:
+      REDIS_HOST: redis:6379
+    volumes:
+      - ./audience_settings/components:/components
+    network_mode: "service:audience-settings"
+    depends_on:
+      - audience-settings
+      - redis
+
+  # develop-analysis — UiPath LangGraph analysis agent (Ollama) over Dapr.
+  develop-analysis:
+    build:
+      context: ./develop_analysis
+    profiles: ["pipeline"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/onlooker
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      OLLAMA_MODEL: llama3.1
+      PUBSUB_NAME: pubsub
+      DAPR_HTTP_PORT: "3500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  develop-analysis-dapr:
+    image: daprio/daprd:1.14.4
+    profiles: ["pipeline"]
+    command:
+      - "./daprd"
+      - "--app-id"
+      - "develop-analysis"
+      - "--app-port"
+      - "8103"
+      - "--dapr-http-port"
+      - "3500"
+      - "--resources-path"
+      - "/components"
+    environment:
+      REDIS_HOST: redis:6379
+    volumes:
+      - ./develop_analysis/components:/components
+    network_mode: "service:develop-analysis"
+    depends_on:
+      - develop-analysis
+      - redis
 
 volumes:
   pgdata:

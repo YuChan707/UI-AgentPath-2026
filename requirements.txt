@@ -19,9 +19,6 @@ aiosqlite
 # Vector database
 chromadb
 
-# Azure storage
-azure-storage-blob
-
 # AI / LLM
 groq
 openai

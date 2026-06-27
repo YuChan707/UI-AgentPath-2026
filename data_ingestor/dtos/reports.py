@@ -1,7 +1,7 @@
 """Report DTOs (Pydantic).
 
-Request/result models for end-of-session report generation (PPTX + email
-draft), consumed by backend.services.pptx_generator and email_service.
+Request/result models for report generation (PPTX + email draft), consumed by
+the report/analysis service.
 
 Scaffold stubs — fill in fields as report generation solidifies.
 """

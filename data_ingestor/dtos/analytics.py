@@ -1,8 +1,7 @@
 """Analytics DTOs (Pydantic).
 
-Models for the streaming/analytics pipeline: the raw events that arrive over
-the WebSocket and the analytic records derived from them by the agents. Used
-by backend.services.ingestion_service to persist to the DB.
+Models for the analytics pipeline: the raw events and the analytic records
+derived from them, persisted to the DB by the ingestion service.
 
 Scaffold stubs — fill in fields as the pipeline solidifies.
 """

@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "audience-settings": "agent.py:graph"
+  },
+  "env": ".env"
+}

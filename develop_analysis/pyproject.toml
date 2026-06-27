@@ -1,0 +1,19 @@
+[project]
+name = "develop-analysis"
+version = "0.1.0"
+description = "OnLooker develop-analysis — UiPath LangGraph agent (local Ollama) over Dapr"
+requires-python = ">=3.11"
+dependencies = [
+    "uipath-langchain",
+    "langgraph",
+    "langchain-openai",
+    "asyncpg",
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic",
+    "python-dotenv",
+]
+
+[tool.uipath]
+graph = "develop-analysis"

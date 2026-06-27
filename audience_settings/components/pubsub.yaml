@@ -1,0 +1,13 @@
+# Dapr Redis pub/sub (shared bus, component name "pubsub").
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: "{env:REDIS_HOST}"
+    - name: redisPassword
+      value: ""

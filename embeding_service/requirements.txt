@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+python-dotenv
+
+# Database (read product bytes)
+asyncpg
+
+# Vector store
+chromadb
+
+# Document extraction
+python-pptx
+python-docx
+pypdf

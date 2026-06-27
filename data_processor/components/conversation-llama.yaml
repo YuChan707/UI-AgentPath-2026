@@ -8,7 +8,7 @@
 #
 # Start the model (example with dockerized Ollama):
 #   docker run -d -p 11434:11434 --name llama ollama/ollama
-#   docker exec -it llama ollama pull llama3.2:3b
+#   docker exec -it llama ollama pull llama3.1
 #
 # Run the processor with the Dapr sidecar:
 #   dapr run --app-id data-processor \
@@ -25,7 +25,7 @@ spec:
     - name: key
       value: "ollama"            # Ollama does not validate the token; any value works.
     - name: model
-      value: "llama3.2:3b"
+      value: "llama3.1"
     - name: endpoint
       value: "http://localhost:11434/v1"   # OpenAI-compatible endpoint of the container
     - name: cacheTTL

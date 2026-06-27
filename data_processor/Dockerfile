@@ -1,19 +1,18 @@
-# IMPORTANTE: construir desde la RAIZ del repo (necesita el paquete dtos/):
-#   docker build -f data_processor/Dockerfile -t onlooker-data-processor .
-FROM python:3-slim
+# Self-contained: build from THIS folder (vendored dtos/ included).
+#   docker build -t onlooker-data-processor .
+FROM python:3.11-slim
 WORKDIR /app
 
-COPY data_processor/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# dtos/ es compartido (data CRUDA + entidades de comportamiento) -> se copia.
-COPY dtos/ ./dtos/
-COPY data_processor/ ./data_processor/
+# The whole package (incl. the vendored dtos/) goes under /app/data_processor/.
+COPY . /app/data_processor/
 
-ENV PYTHONPATH="/app"
+# /app makes `data_processor` importable for -m; the package dir makes the
+# vendored `dtos` importable from within it.
+ENV PYTHONPATH="/app:/app/data_processor"
 ENV PYTHONUNBUFFERED=1
-
-# Transporte LLM por defecto dentro del contenedor (override por env).
 ENV LLM_TRANSPORT=auto
 
 CMD ["python", "-m", "data_processor"]

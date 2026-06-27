@@ -20,8 +20,8 @@ Pipeline per location (zip_code):
 
 Access to the model (Dapr Conversation API / OpenAI-compatible endpoint / mock)
 is abstracted by `llm_client.LlamaClient`; grounding in real evidence is provided by
-`foundry_iq.FoundryIQ`. If no model is available, it falls back to valid fixtures
-so that the pipeline always runs.
+`grounding.ground` (local, over the real Census statistics). If no model is
+available, it falls back to valid fixtures so that the pipeline always runs.
 
 Usage:
     python -m data_processor                 # processes what the ingestor persisted
@@ -35,7 +35,7 @@ import logging
 
 from dtos.data_ingestors import FIELD_DOMAINS, INCOME_BRACKETS
 
-from .foundry_iq import FoundryIQ
+from .grounding import ground
 from .llm_client import LlamaClient, LLMUnavailable, extract_json
 from .persistence import (
     load_locations,
@@ -88,25 +88,22 @@ def generate(
     spec: PromptSpec,
     *,
     client: LlamaClient,
-    foundry: FoundryIQ,
     location_stats: dict | None = None,
     build_args: tuple = (),
     build_kwargs: dict | None = None,
     mock_args: tuple = (),
     mock_kwargs: dict | None = None,
-    grounding_query: str = "",
 ):
     """Runs a PromptSpec end-to-end and returns the validated entity.
 
-    - Injects Foundry IQ grounding.
+    - Injects local grounding over the real Census statistics.
     - If the transport is mock (or the model fails), uses the spec's fixture.
     - ALWAYS validates against the marshmallow schema (so the mock is also validated).
     """
     build_kwargs = dict(build_kwargs or {})
     mock_kwargs = dict(mock_kwargs or {})
 
-    grounding = foundry.ground(grounding_query or spec.name, location_stats)
-    build_kwargs.setdefault("grounding", grounding)
+    build_kwargs.setdefault("grounding", ground(location_stats))
 
     raw = None
     if not client.is_mock:
@@ -231,7 +228,6 @@ def process_location(
     location: dict,
     *,
     client: LlamaClient,
-    foundry: FoundryIQ,
     max_groups: int = 12,
     persist: bool = True,
 ) -> dict:
@@ -244,24 +240,20 @@ def process_location(
     behavior_model = generate(
         BEHAVIOR_MODEL_PROMPT,
         client=client,
-        foundry=foundry,
         location_stats=stats,
         build_args=(stats,),
         build_kwargs={"location_label": label},
         mock_args=(stats,),
-        grounding_query=f"digital behavior population {label}",
     )
 
     # 2) Groups by field/topic.
     field_groups = generate(
         FIELD_GROUPS_PROMPT,
         client=client,
-        foundry=foundry,
         location_stats=stats,
         build_args=(stats,),
         build_kwargs={"location_label": label},
         mock_args=(stats,),
-        grounding_query=f"audiences by field {label}",
     )
 
     # 3) Varied groups (automated prompt) -> profiles with ranges/scores.
@@ -271,13 +263,11 @@ def process_location(
         profile = generate(
             GROUP_PROFILE_PROMPT,
             client=client,
-            foundry=foundry,
             location_stats=stats,
             build_args=(definition, stats),
             build_kwargs={"location_label": label, "metrics": CORE_METRICS},
             mock_args=(definition, stats),
             mock_kwargs={"metrics": CORE_METRICS},
-            grounding_query=f"{definition['group_name']} {label}",
         )
         group_profiles.append(profile)
 
@@ -320,7 +310,6 @@ def run(
 ) -> list[dict]:
     """Processes the locations persisted by the data_ingestor."""
     client = LlamaClient(transport=transport)
-    foundry = FoundryIQ()
 
     locations = load_locations()
     if not locations:
@@ -334,14 +323,14 @@ def run(
         locations = locations[:limit]
 
     logger.info(
-        "LLM transport=%s | Foundry IQ remote=%s | %d locations",
-        client.transport, foundry.enabled, len(locations),
+        "LLM transport=%s | local Census grounding | %d locations",
+        client.transport, len(locations),
     )
 
     specs = []
     for location in locations:
         try:
-            specs.append(process_location(location, client=client, foundry=foundry, max_groups=max_groups, persist=persist))
+            specs.append(process_location(location, client=client, max_groups=max_groups, persist=persist))
         except Exception as exc:  # noqa: BLE001 - do not abort everything for one location
             logger.exception("Failed processing %s: %s", location.get("zip_code"), exc)
     logger.info("Pipeline finished: %d locations processed.", len(specs))
@@ -356,7 +345,6 @@ __all__ = [
     "summarize_scores",
     "top_ethnicities",
     "LlamaClient",
-    "FoundryIQ",
     "PROMPTS",
     "PromptSpec",
     "BEHAVIOR_MODEL_PROMPT",

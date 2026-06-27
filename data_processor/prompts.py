@@ -61,7 +61,7 @@ from dtos.data_ingestors import (
 from dtos.data_processors import ReactionProfile as ReactionProfileSchema
 
 # Default model: the dockerized Llama (override with LLAMA_MODEL).
-DEFAULT_MODEL = os.getenv("LLAMA_MODEL", "llama3.2:3b")
+DEFAULT_MODEL = os.getenv("LLAMA_MODEL", "llama3.1")
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def _json(obj) -> str:
 
 
 def _with_grounding(user: str, grounding: str = "") -> str:
-    """Appends the Foundry IQ evidence block to the user message."""
+    """Appends the local Census grounding evidence block to the user message."""
     if not grounding:
         return user
     return f"{grounding}\n\n{user}"
@@ -675,7 +675,7 @@ BEHAVIOR_MODEL_PROMPT = PromptSpec(
         "location_stats (dict LocationStatistics: median_income, age_ranges, "
         "ethnicity_distribution, unemployment_rate, poverty_rate, ...), "
         "optional location_label, optional metrics (subset of BEHAVIOR_METRICS), "
-        "optional grounding (Foundry IQ evidence)."
+        "optional grounding (local Census evidence)."
     ),
     expected_output="JSON array of BehaviorFormula (>=1 per requested metric).",
     builder=build_behavior_model_prompt,

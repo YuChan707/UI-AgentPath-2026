@@ -19,7 +19,7 @@ caller fall back to the mock. The selection is controlled by the environment:
     LLM_TRANSPORT      auto | dapr | http | mock        (default: auto)
     DAPR_LLM_COMPONENT Dapr component name               (default: llama)
     LLAMA_BASE_URL     OpenAI-compatible base            (default: http://localhost:11434/v1)
-    LLAMA_MODEL        model name                        (default: llama3.2:3b)
+    LLAMA_MODEL        model name                        (default: llama3.1)
     LLAMA_API_KEY      token (Ollama does not require it) (default: ollama)
     LLM_TEMPERATURE    sampling temperature              (default: 0.4)
 """
@@ -126,7 +126,7 @@ class LlamaClient:
 
     def __post_init__(self) -> None:
         self.transport = (self.transport or _env("LLM_TRANSPORT", "auto")).lower()
-        self.model = self.model or _env("LLAMA_MODEL", "llama3.2:3b")
+        self.model = self.model or _env("LLAMA_MODEL", "llama3.1")
         self.dapr_component = self.dapr_component or _env("DAPR_LLM_COMPONENT", "llama")
         self.base_url = (self.base_url or _env("LLAMA_BASE_URL", "http://localhost:11434/v1")).rstrip("/")
         self.api_key = self.api_key or _env("LLAMA_API_KEY", "ollama")

@@ -3,7 +3,7 @@
 # The data_processor saves the audience specs (by zip_code) as state:
 #   client.save_state("statestore", zip_code, json_of_the_audience_spec)
 #
-# The connection string comes from the environment (DATABASE_URL, see containers_env/.env.example).
+# The connection string comes from the environment (DATABASE_URL).
 apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:

@@ -1,0 +1,21 @@
+[project]
+name = "features-extractor"
+version = "0.1.0"
+description = "OnLooker features-extractor — UiPath LangGraph agent (local Ollama) over Dapr"
+requires-python = ">=3.11"
+dependencies = [
+    "uipath-langchain",
+    "langgraph",
+    "langchain-openai",
+    "chromadb",
+    "asyncpg",
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic",
+    "python-dotenv",
+]
+
+# UiPath agent entry point (graph) — see langgraph.json.
+[tool.uipath]
+graph = "features-extractor"

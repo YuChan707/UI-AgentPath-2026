@@ -3,7 +3,7 @@
 COMPOSE       := docker compose
 PY            := .venv/bin/python
 PIP           := .venv/bin/pip
-MODEL         ?= llama3.2:3b
+MODEL         ?= llama3.1
 
 ENV_FILE      := .env
 ENV_EXAMPLE   := .env.example
@@ -12,13 +12,13 @@ UI_DIR        := ui-onlooker
 UI_ENV        := $(UI_DIR)/.env.local
 
 # Env vars that must be defined (in .env or data_ingestor/.env) before deploying.
-REQUIRED_VARS := DATABASE_URL GROQ_API_KEY CENSUS_DATA_API
+REQUIRED_VARS := DATABASE_URL CENSUS_DATA_API
 
 .DEFAULT_GOAL := help
 .PHONY: help setup venv install env ui-install ui-env \
         check check-tools check-node check-env check-deps predeploy \
-        build deploy up up-infra down down-v restart ps logs backend-logs ui-logs \
-        schema model-pull ingest process backend ui-dev \
+        build deploy up up-infra down down-v restart ps logs ui-logs \
+        schema model-pull ingest process ui-dev vendor-all \
         dev-ingest dev-process lint clean
 
 help: ## Show this help
@@ -85,7 +85,7 @@ venv: ## Create the local virtualenv if missing
 
 install: venv ## Install all Python dependencies into .venv
 	$(PIP) install -q -r requirements.txt -r data_ingestor/requirements.txt \
-		-r data_processor/requirements.txt -r backend/requirements.txt
+		-r data_processor/requirements.txt -r embeding_service/requirements.txt
 	@echo "✓ Python dependencies installed"
 
 env: ## Create .env from .env.example if missing
@@ -107,7 +107,7 @@ build: predeploy ## Build all images (apps + jobs)
 
 deploy: predeploy build up ## Preflight -> build -> start the stack
 
-up: predeploy ## Start infra + backend + ui (runs predeploy checks first)
+up: predeploy ## Start infra + ui (runs predeploy checks first)
 	$(COMPOSE) up -d
 
 up-infra: check-tools ## Start only infra (postgres, chromadb, ollama, redis)
@@ -129,29 +129,28 @@ ps: ## List running services
 logs: ## Tail logs of all services
 	$(COMPOSE) logs -f
 
-backend-logs: ## Tail backend logs
-	$(COMPOSE) logs -f backend
-
 ui-logs: ## Tail ui-onlooker logs
 	$(COMPOSE) logs -f ui-onlooker
 
 ## ---------------------------------------------------------------- data ------
-schema: check-env ## Apply init.sql to the cloud DB (Azure/Supabase) via DATABASE_URL
-	$(PY) containers_env/postgresql-db/apply_schema.py
+vendor-all: ## Re-vendor contracts/dtos into each container from canonical dtos/
+	$(MAKE) -C embeding_service vendor
+	$(MAKE) -C data_processor vendor
+	@echo "✓ all containers re-vendored from dtos/ (data_ingestor keeps its own copy)"
+
+schema: check-env ## Apply init.sql to the Postgres DB via DATABASE_URL
+	$(PY) postgresql-db/apply_schema.py
 
 model-pull: ## Pull the Llama model into the ollama service
 	$(COMPOSE) exec ollama ollama pull $(MODEL)
 
-ingest: predeploy ## Run data_ingestor once (Census -> locations table)
+ingest: predeploy ## Run data_ingestor once (Census -> locations JSON)
 	$(COMPOSE) run --rm data_ingestor
 
 process: predeploy ## Run data_processor once (synthetic audience)
 	$(COMPOSE) run --rm data_processor
 
 ## ------------------------------------------------ local (no docker) ---------
-backend: check ## Run the FastAPI backend locally (uvicorn, repo root)
-	.venv/bin/uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-
 ui-dev: ## Run the frontend dev server (npm run dev)
 	cd $(UI_DIR) && npm run dev
 
@@ -162,7 +161,7 @@ dev-process: ## Run the processor on the host (LLM_TRANSPORT=mock, offline)
 	$(PY) -m data_processor --transport mock
 
 lint: ## Ruff check the Python code
-	.venv/bin/ruff check data_processor/ data_ingestor/ dtos/ backend/ containers_env/postgresql-db/
+	.venv/bin/ruff check data_processor/ data_ingestor/ dtos/ embeding_service/ postgresql-db/
 
 clean: ## Remove caches and pipeline output artifacts
 	rm -rf data_processor/output data_ingestor/data/locations
