@@ -1,317 +1,336 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
-import ChatBoxMode from "@/components/ChatBoxMode";
-import SessionSettingsModal from "@/components/SessionSettingsModal";
-import UploadResourcesModal from "@/components/UploadResourcesModal";
-import ProjectSettings from "@/components/ProjectSettings";
-import { FeedbackFeed } from "@/components/FeedbackFeed";
-import AnalysisGraphPanel from "@/components/AnalysisGraphPanel";
-import DashboardView from "@/components/DashboardView";
+import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
-  BarChart2, Scale, MessageSquare, BookOpen, Settings2,
-  HelpCircle, User,
+  FileText, HelpCircle, User, Plus, X, LayoutDashboard, MessageSquare,
 } from "lucide-react";
-import { useStore, CoachingPayload, AudiencePayload, AgentEvent, LiveAIInsight } from "@/lib/store";
+import {
+  uploadDocument, getPipelineStatus,
+  type AudienceSettings, type InsightSelection, type PipelineStatus,
+} from "@/lib/api";
 
-/* ── Logo ── */
-const LOGO_SRC =
-  "data:image/png;base64,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";
+const AreaMap = dynamic(() => import("@/components/AreaMap"), {
+  ssr: false,
+  loading: () => <div className="h-[220px] w-full animate-pulse rounded-xl bg-gray-100" />,
+});
 
-/* ── Tab definitions ── */
-type TabId = "graph" | "pov" | "feedback" | "resources" | "settings";
+const ACCENT = "#0078d4";
+const ACCEPTED = ".txt,.pptx,.pdf,.md,.doc,.docx";
 
-const TABS: { id: TabId; label: string; Icon: React.FC<{ size?: number; color?: string; strokeWidth?: number }> }[] = [
-  { id: "graph",     label: "Graph Performance", Icon: BarChart2    },
-  { id: "pov",       label: "POV Analysis",      Icon: Scale        },
-  { id: "feedback",  label: "User Feedback",     Icon: MessageSquare },
-  { id: "resources", label: "AI Resources",      Icon: BookOpen     },
-  { id: "settings",  label: "Modify Settings",   Icon: Settings2    },
+const AUDIENCE_TYPES = ["Business", "Academic", "Student", "Casual"];
+const ENVIRONMENTS = ["Professional", "Casual"];
+const SIZES = [
+  { label: "Global Groups", hint: "(1,0M+)", value: 1_000_000 },
+  { label: "Big Groups", hint: "(100,000 - 10,000)", value: 100_000 },
+  { label: "Small Groups", hint: "(9,000 - 1,000)", value: 9_000 },
+  { label: "Local Groups", hint: "(100+)", value: 100 },
 ];
+const GENDERS = [
+  { label: "General", value: "generic" },
+  { label: "Oriented to Male", value: "male" },
+  { label: "Oriented to Female", value: "female" },
+];
+const GOAL_CHIPS = ["Engagement", "Marketing", "Other options"];
 
-/* ── Insight colour map (used by AI Resources panel) ── */
-const INSIGHT_COLORS: Record<LiveAIInsight["category"], { bg: string; text: string; label: string }> = {
-  grammar:    { bg: "rgba(245,158,11,0.12)",  text: "#b45309", label: "Grammar"    },
-  engagement: { bg: "rgba(0,120,212,0.10)",   text: "#0078d4", label: "Engagement" },
-  clarity:    { bg: "rgba(196,54,44,0.10)",   text: "#c4362c", label: "Clarity"    },
-  structure:  { bg: "rgba(139,92,246,0.10)",  text: "#7c3aed", label: "Structure"  },
-  delivery:   { bg: "rgba(16,124,16,0.10)",   text: "#107c10", label: "Delivery"   },
-};
-
-export default function Page() {
-  const [chatActive, setChatActive]       = useState(false);
-  const [uploadOpen, setUploadOpen]       = useState(false);
-  const [activeTab, setActiveTab]         = useState<TabId>("graph");
-
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: "#f3f4f6" }}>
-
-      {/* ── Blue Header ── */}
-      <header
-        className="fixed top-0 w-full z-50 flex items-center justify-between px-6"
-        style={{ background: "#0078d4", height: 56 }}
-      >
-        {/* Left: logo + name */}
-        <div className="flex items-center gap-3">
-          <Image src={LOGO_SRC} alt="OnLooker logo" width={28} height={28} unoptimized />
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>OnLooker AI</span>
-        </div>
-
-        {/* Centre: page title */}
-        <span
-          className="absolute left-1/2 -translate-x-1/2"
-          style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "0.01em" }}
-        >
-          Chat with Looker.AI
-        </span>
-
-        {/* Right: icons */}
-        <div className="flex items-center gap-3">
-          <button
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title="Help"
-          >
-            <HelpCircle size={18} color="#fff" strokeWidth={2} />
-          </button>
-          <button
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title="Profile"
-          >
-            <User size={18} color="#fff" strokeWidth={2} />
-          </button>
-        </div>
-      </header>
-
-      {/* ── Main content ── */}
-      <main className="flex-1 flex flex-col pt-14" style={{ minHeight: "100vh" }}>
-
-        {/* ── Chat section ── */}
-        <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}>
-          <ChatBoxMode
-            onSessionChange={(active) => setChatActive(active)}
-            onUploadOpen={() => setUploadOpen(true)}
-          />
-        </div>
-
-        {/* ── Analytics tab section ── */}
-        <div
-          className="flex"
-          style={{
-            borderTop: "1px solid #e5e7eb",
-            background: "#fff",
-            minHeight: 340,
-          }}
-        >
-          {/* Left: tab sidebar */}
-          <nav
-            className="flex flex-col py-2"
-            style={{
-              width: 64,
-              borderRight: "1px solid #e5e7eb",
-              background: "#fff",
-              flexShrink: 0,
-            }}
-          >
-            {TABS.map(({ id, label, Icon }) => {
-              const active = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  title={active ? undefined : label}
-                  className="flex flex-col items-center justify-center gap-1 transition-colors"
-                  style={{
-                    width: "100%",
-                    padding: "10px 0",
-                    borderTop: "none",
-                    borderRight: "none",
-                    borderBottom: "none",
-                    borderLeft: active ? "3px solid #0078d4" : "3px solid transparent",
-                    background: active ? "rgba(0,120,212,0.06)" : "transparent",
-                    cursor: "pointer",
-                    outline: "none",
-                  }}
-                >
-                  <Icon
-                    size={20}
-                    color={active ? "#0078d4" : "#9ca3af"}
-                    strokeWidth={active ? 2.5 : 1.8}
-                  />
-                  {active && (
-                    <span
-                      style={{
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: "#0078d4",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        textAlign: "center",
-                        lineHeight: 1.2,
-                        maxWidth: 56,
-                        paddingLeft: 4,
-                        paddingRight: 4,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right: tab content */}
-          <div className="flex-1 overflow-auto" style={{ minWidth: 0 }}>
-            <TabContent activeTab={activeTab} chatActive={chatActive} />
-          </div>
-        </div>
-      </main>
-
-      {/* ── Modals ── */}
-      <SessionSettingsModal onComplete={() => {}} />
-      {uploadOpen && <UploadResourcesModal onClose={() => setUploadOpen(false)} />}
-    </div>
+    <label className="block mb-6">
+      <span className="block text-sm text-gray-500 mb-1.5">{label}</span>
+      {children}
+    </label>
   );
 }
 
-/* ── Tab content switcher ── */
-function TabContent({ activeTab, chatActive }: { activeTab: TabId; chatActive: boolean }) {
-  const docAnalysis    = useStore((s) => s.latestDocumentAnalysis);
-  const liveAIInsights = useStore((s) => s.liveAIInsights);
-  const events         = useStore((s) => s.events);
-
-  if (activeTab === "graph") {
-    return docAnalysis ? (
-      <div className="p-4 h-full overflow-auto">
-        <AnalysisGraphPanel data={docAnalysis} />
-      </div>
-    ) : (
-      <EmptyTabPanel
-        icon={<BarChart2 size={32} color="#d1d5db" strokeWidth={1.5} />}
-        message="Upload a document and send it to see engagement graphs."
-      />
-    );
-  }
-
-  if (activeTab === "pov") {
-    return (
-      <div className="p-4 h-full overflow-auto">
-        <DashboardView />
-      </div>
-    );
-  }
-
-  if (activeTab === "feedback") {
-    return (
-      <div className="p-4 h-full overflow-auto">
-        <FeedbackFeed />
-      </div>
-    );
-  }
-
-  if (activeTab === "resources") {
-    return (
-      <div className="p-4 h-full overflow-auto">
-        <AIResourcesPanel insights={liveAIInsights} chatActive={chatActive} events={events} />
-      </div>
-    );
-  }
-
-  if (activeTab === "settings") {
-    return (
-      <div className="p-4 h-full overflow-auto max-w-lg">
-        <ProjectSettings mode="analysis" />
-      </div>
-    );
-  }
-
-  return null;
-}
-
-function EmptyTabPanel({ icon, message }: { icon: React.ReactNode; message: string }) {
+function Radio({ checked, onChange, label, hint }: { checked: boolean; onChange: () => void; label: string; hint?: string }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-3 p-8" style={{ color: "#9ca3af" }}>
-      {icon}
-      <p style={{ fontSize: 13, textAlign: "center", maxWidth: 260, lineHeight: 1.5 }}>{message}</p>
-    </div>
+    <label className="flex items-center gap-2 py-1.5 cursor-pointer text-sm">
+      <input type="radio" checked={checked} onChange={onChange} className="accent-[#0078d4]" />
+      <span className="text-gray-700">{label}</span>
+      {hint && <span className="text-gray-400 ml-1">{hint}</span>}
+    </label>
   );
 }
 
-/* ── AI Resources panel ── */
-function AIResourcesPanel({
-  insights,
-  chatActive,
-  events,
-}: {
-  insights: LiveAIInsight[];
-  chatActive: boolean;
-  events: AgentEvent[];
-}) {
-  const endRef = useRef<HTMLDivElement>(null);
-  const hasInsights = insights.length > 0;
-  const liveEvents = events.filter((e) => e.agent === "coaching" || e.agent === "audience");
-  const hasData = hasInsights || liveEvents.length > 0;
+export default function Home() {
+  const [logoOk, setLogoOk] = useState(true);
+  const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [audienceType, setAudienceType] = useState("Business");
+  const [environment, setEnvironment] = useState("Professional");
+  const [area, setArea] = useState("");
+  const [size, setSize] = useState(9_000);
+  const [gender, setGender] = useState("generic");
+  const [minAge, setMinAge] = useState(20);
+  const [maxAge, setMaxAge] = useState(45);
+  const [format, setFormat] = useState<"dashboard" | "chat">("dashboard");
+
+  const [mainGoal, setMainGoal] = useState("");
+  const [extraGoals, setExtraGoals] = useState<string[]>([]);
+  const [goals, setGoals] = useState<string[]>([]);
+  const [insights, setInsights] = useState<InsightSelection>({
+    detect_strengts: true, detect_weakness: true, detect_potential: false, general_report: false,
+  });
+
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [productId, setProductId] = useState<string | null>(null);
+  const [status, setStatus] = useState<PipelineStatus | null>(null);
+
+  const toggleGoal = (g: string) =>
+    setGoals((cur) => (cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g]));
+  const toggleInsight = (k: keyof InsightSelection) =>
+    setInsights((cur) => ({ ...cur, [k]: !cur[k] }));
+  const setExtra = (i: number, v: string) =>
+    setExtraGoals((cur) => cur.map((g, idx) => (idx === i ? v : g)));
+  const removeExtra = (i: number) =>
+    setExtraGoals((cur) => cur.filter((_, idx) => idx !== i));
+
+  async function handleSend() {
+    if (!file) { setError("Please upload a document first."); return; }
+    setSending(true);
+    setError(null);
+    setStatus(null);
+    const allGoals = [mainGoal, ...extraGoals].map((g) => g.trim()).filter(Boolean).join(" | ");
+    const settings: AudienceSettings = {
+      audience_type: audienceType,
+      audience_enviroment: environment,
+      audience_area: area,
+      audience_size: size,
+      gender_dstn: gender,
+      age_dstn: `${minAge}-${maxAge}`,
+      main_goal: allGoals,
+      response_goal: goals.join(", "),
+    };
+    try {
+      const res = await uploadDocument(file, settings, insights);
+      setProductId(res.id_product);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "upload failed");
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [hasData]);
+    if (!productId) return;
+    let active = true;
+    const tick = async () => {
+      try {
+        const s = await getPipelineStatus(productId);
+        if (active) setStatus(s);
+        if (active && s.product.status !== "analyzed") setTimeout(tick, 3000);
+      } catch {
+        if (active) setTimeout(tick, 4000);
+      }
+    };
+    tick();
+    return () => { active = false; };
+  }, [productId]);
 
-  if (!hasData) {
-    return (
-      <EmptyTabPanel
-        icon={<BookOpen size={32} color="#d1d5db" strokeWidth={1.5} />}
-        message={chatActive ? "AI is processing your content…" : "Send a message or upload a file to see AI insights here."}
-      />
-    );
-  }
+  const inputCls = "w-full rounded-full bg-gray-200/70 px-4 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-[#0078d4]/40";
 
   return (
-    <div className="flex flex-col gap-3">
-      <h3 style={{ fontSize: 13, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-        Live AI Insights
-      </h3>
-
-      {hasInsights && insights.map((item, i) => {
-        const c = INSIGHT_COLORS[item.category] ?? INSIGHT_COLORS.delivery;
-        return (
-          <div key={i} className="flex items-start gap-2">
-            <span
-              style={{
-                fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em",
-                background: c.bg, color: c.text, padding: "3px 6px", borderRadius: 4,
-                flexShrink: 0, minWidth: 60, textAlign: "center", lineHeight: 1.6,
-              }}
-            >
-              {c.label}
-            </span>
-            <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{item.text}</p>
+    <div className="min-h-screen bg-gray-50 text-gray-800">
+      {/* ── header ── */}
+      <header className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white">
+        {logoOk ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/logo.png" alt="ONLOOKER" className="h-9 w-auto" onError={() => setLogoOk(false)} />
+        ) : (
+          <div className="flex items-center gap-1 text-2xl font-semibold tracking-tight text-gray-700">
+            <span style={{ color: ACCENT }}>O</span>NL<span style={{ color: ACCENT }}>OO</span>KER
           </div>
-        );
-      })}
+        )}
+        <nav className="flex items-center gap-8 text-sm text-gray-600">
+          <a className="hover:text-gray-900" href="#">Dashboard</a>
+          <a className="hover:text-gray-900" href="#">Documentation</a>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100"><HelpCircle size={18} /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100"><User size={20} /></span>
+        </nav>
+      </header>
 
-      {liveEvents.map((e, i) => {
-        const text = e.agent === "coaching"
-          ? (e.payload as CoachingPayload).tip
-          : (() => { const p = e.payload as AudiencePayload; return `${p.reaction_type} — ${p.body_language}`; })();
-        return (
-          <div key={`ev-${i}`} className="flex items-start gap-2">
-            <span
-              style={{
-                fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em",
-                background: "rgba(0,120,212,0.10)", color: "#0078d4", padding: "3px 6px",
-                borderRadius: 4, flexShrink: 0, minWidth: 60, textAlign: "center", lineHeight: 1.6,
-              }}
-            >
-              {e.agent}
-            </span>
-            <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{text}</p>
+      <main className="mx-auto max-w-7xl px-8 py-6">
+        {/* ── upload ── */}
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="flex items-center gap-2 text-lg text-gray-600">
+            <FileText size={18} /> Upload The Characteristics of Your Service
+          </h1>
+          <span className="text-xs text-gray-400">{ACCEPTED.replaceAll(",", ", ")}</span>
+        </div>
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="w-full rounded-2xl border border-dashed border-gray-300 bg-gray-100 py-6 text-sm text-gray-500 hover:bg-gray-200/60"
+        >
+          {file ? `📄 ${file.name}` : "Click to upload a document"}
+        </button>
+        <input ref={fileRef} type="file" accept={ACCEPTED} hidden
+          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(null); }} />
+
+        {/* ── two columns ── */}
+        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+          {/* LEFT */}
+          <section>
+            <h2 className="text-xl text-gray-700">Configure Your Audience</h2>
+            <p className="mb-4 text-xs text-gray-400">Keep in mind that this is the audience you want to attract to your project; this is your audience&apos;s profile.</p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-6">
+              <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2 md:divide-x md:divide-gray-100">
+                {/* col 1 */}
+                <div className="md:pr-8">
+                  <Field label="Type of Audience">
+                    <select value={audienceType} onChange={(e) => setAudienceType(e.target.value)} className={inputCls}>
+                      {AUDIENCE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Environment">
+                    <select value={environment} onChange={(e) => setEnvironment(e.target.value)} className={inputCls}>
+                      {ENVIRONMENTS.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Area (Optional) — New York City">
+                    <AreaMap onChange={setArea} />
+                  </Field>
+
+                  <p className="mt-2 mb-2 text-sm text-gray-500">Select Format</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {([
+                      { id: "dashboard", Icon: LayoutDashboard, title: "Dashboard", desc: "See the scores and feature scores given by the audience to your service." },
+                      { id: "chat", Icon: MessageSquare, title: "Chat", desc: "The audience is a chatbot you can interact with and ask specific questions." },
+                    ] as const).map(({ id, Icon, title, desc }) => (
+                      <button key={id} onClick={() => setFormat(id)}
+                        className={`rounded-xl border p-3 text-left transition ${format === id ? "border-[#0078d4] bg-[#0078d4]/5" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}>
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Icon size={16} /> {title}</div>
+                        <p className="mt-1 text-xs text-gray-400">{desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* col 2 */}
+                <div className="mt-8 md:mt-0 md:pl-8">
+                  <p className="mb-3 text-sm font-semibold text-gray-600">Extra Characteristics</p>
+
+                  <p className="mt-3 mb-1 text-sm text-gray-500">Gender Distribution</p>
+                  {GENDERS.map((g) => (
+                    <Radio key={g.value} checked={gender === g.value} onChange={() => setGender(g.value)} label={g.label} />
+                  ))}
+
+                  <p className="mt-5 mb-1 text-sm text-gray-500">Audience Size</p>
+                  {SIZES.map((s) => (
+                    <Radio key={s.value} checked={size === s.value} onChange={() => setSize(s.value)} label={s.label} hint={s.hint} />
+                  ))}
+
+                  <p className="mt-5 mb-1 text-sm text-gray-500">Age Distribution</p>
+                  <p className="mb-2 text-xs font-medium text-gray-600">{minAge} - {maxAge} years</p>
+                  <div className="dual-range">
+                    <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded bg-gray-200" />
+                    <div className="absolute top-1/2 h-1 -translate-y-1/2 rounded bg-[#0078d4]"
+                      style={{ left: `${minAge}%`, right: `${100 - maxAge}%` }} />
+                    <input type="range" min={0} max={100} value={minAge}
+                      onChange={(e) => setMinAge(Math.min(+e.target.value, maxAge))} />
+                    <input type="range" min={0} max={100} value={maxAge}
+                      onChange={(e) => setMaxAge(Math.max(+e.target.value, minAge))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* RIGHT */}
+          <section>
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl text-gray-700">Describe your Goals</h2>
+                <p className="mb-4 text-xs text-gray-400">Define your specific goals here, including desired audience responses or core product objectives.</p>
+              </div>
+              <span className="text-xs text-gray-400">Optional*</span>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-6">
+              <p className="mb-2 text-base text-gray-700">Main Goal</p>
+              <textarea value={mainGoal} onChange={(e) => setMainGoal(e.target.value)} rows={4}
+                placeholder="Type your primary goal here ..."
+                className="w-full resize-none rounded-xl bg-gray-100 p-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-[#0078d4]/40" />
+
+              {extraGoals.map((g, i) => (
+                <div key={i} className="mt-2 flex items-start gap-2">
+                  <textarea value={g} onChange={(e) => setExtra(i, e.target.value)} rows={2}
+                    placeholder={`Additional goal ${i + 1} ...`}
+                    className="w-full resize-none rounded-xl bg-gray-100 p-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-[#0078d4]/40" />
+                  <button onClick={() => removeExtra(i)} className="mt-1 text-gray-400 hover:text-red-500"><X size={16} /></button>
+                </div>
+              ))}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <span>Oriented to Generate:</span>
+                {GOAL_CHIPS.map((g) => (
+                  <button key={g} onClick={() => toggleGoal(g)}
+                    className={`rounded-full px-3 py-1 ${goals.includes(g) ? "bg-[#0078d4] text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}>{g}</button>
+                ))}
+              </div>
+              <div className="mt-3 flex justify-center">
+                <button onClick={() => setExtraGoals((cur) => [...cur, ""])} title="Add another goal"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-[#0078d4] hover:text-white">
+                  <Plus size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-10">
+              <h3 className="mb-3 text-lg text-gray-700">Insights to Generate</h3>
+              {([
+                ["detect_strengts", "Detect Strenghts Of My Product"],
+                ["detect_weakness", "Detect Weakness of My Product"],
+                ["detect_potential", "Detect Potentialities of my Product"],
+                ["general_report", "General Report"],
+              ] as const).map(([k, label]) => (
+                <label key={k} className="flex items-center gap-3 py-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={insights[k]} onChange={() => toggleInsight(k)} className="h-4 w-4 accent-[#0078d4]" />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* ── send + status ── */}
+        <div className="mt-8 flex flex-col items-end gap-2">
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {!file && !error && <p className="text-xs text-gray-400">Upload a document to enable analysis.</p>}
+          <button onClick={handleSend} disabled={sending}
+            className="rounded-lg px-12 py-2.5 text-sm font-medium text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundColor: ACCENT }}>
+            {sending ? "Sending…" : "Send"}
+          </button>
+        </div>
+
+        {status && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+            <p className="text-sm text-gray-600">
+              Product <code className="text-xs">{status.product.id_product}</code> — status:{" "}
+              <span className="font-medium" style={{ color: ACCENT }}>{status.product.status}</span>
+              {" · "}{status.n_responses} audience responses
+            </p>
+            {status.analysis && (
+              <div className="mt-3 grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+                {status.analysis.strengths?.length ? (
+                  <div><p className="font-medium text-green-700">Strengths</p><ul className="list-disc pl-5 text-gray-600">{status.analysis.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+                ) : null}
+                {status.analysis.weakness?.length ? (
+                  <div><p className="font-medium text-red-700">Weaknesses</p><ul className="list-disc pl-5 text-gray-600">{status.analysis.weakness.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+                ) : null}
+                {status.analysis.points_with_potential?.length ? (
+                  <div><p className="font-medium text-amber-700">Potential</p><ul className="list-disc pl-5 text-gray-600">{status.analysis.points_with_potential.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+                ) : null}
+                {status.analysis.audience_response_analysis ? (
+                  <div><p className="font-medium text-gray-700">Report</p><p className="text-gray-600">{status.analysis.audience_response_analysis}</p></div>
+                ) : null}
+              </div>
+            )}
           </div>
-        );
-      })}
-      <div ref={endRef} />
+        )}
+      </main>
     </div>
   );
 }

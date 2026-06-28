@@ -23,5 +23,5 @@ run: ## Run the image standalone
 
 dapr: ## Run dev server with a Dapr sidecar (to publish document.uploaded)
 	REDIS_HOST=localhost:6379 dapr run --app-id ui-onlooker --app-port $(PORT) \
-		--resources-path components \
+		--resources-path dapr-components \
 		-- npm run dev
