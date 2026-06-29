@@ -8,7 +8,10 @@ usando ollama para almacenar los vectores en chroma db").
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 import asyncio
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 import os
 
 import httpx
@@ -20,10 +23,13 @@ OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
 
+<<<<<<< HEAD
 # Dynamic concurrency for the local Ollama (defaults to CPU count). Bounds how
 # many embedding requests are in flight at once so we don't overwhelm the model.
 NUM_PARALLEL = int(os.getenv("OLLAMA_NUM_PARALLEL") or max(2, os.cpu_count() or 2))
 
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 
 def collection_name(id_product: str) -> str:
     """Deterministic Chroma collection name for a product."""
@@ -31,6 +37,7 @@ def collection_name(id_product: str) -> str:
 
 
 async def embed_chunks(chunks: list[str]) -> list[list[float]]:
+<<<<<<< HEAD
     """Return one embedding vector per chunk via the Ollama embeddings API.
 
     Runs the calls **concurrently** (bounded by ``OLLAMA_NUM_PARALLEL``) and
@@ -48,6 +55,19 @@ async def embed_chunks(chunks: list[str]) -> list[list[float]]:
                 return resp.json()["embedding"]
 
         return list(await asyncio.gather(*(_one(c) for c in chunks)))
+=======
+    """Return one embedding vector per chunk via the Ollama embeddings API."""
+    vectors: list[list[float]] = []
+    async with httpx.AsyncClient(timeout=120) as client:
+        for chunk in chunks:
+            resp = await client.post(
+                f"{OLLAMA_HOST}/api/embeddings",
+                json={"model": OLLAMA_EMBED_MODEL, "prompt": chunk},
+            )
+            resp.raise_for_status()
+            vectors.append(resp.json()["embedding"])
+    return vectors
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 
 
 def store(id_product: str, chunks: list[str], vectors: list[list[float]]) -> str:

@@ -113,13 +113,21 @@ services:
   # Start with:  docker compose --profile pipeline up --build
   embeding-service:
     build:
+<<<<<<< HEAD
       context: ./embeding_service
+=======
+      context: .
+      dockerfile: embeding_service/Dockerfile
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
     profiles: ["pipeline"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/onlooker
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_EMBED_MODEL: nomic-embed-text
+<<<<<<< HEAD
       OLLAMA_NUM_PARALLEL: ""
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
       CHROMA_HOST: chromadb
       CHROMA_PORT: "8000"
       PUBSUB_NAME: pubsub
@@ -158,6 +166,7 @@ services:
       - embeding-service
       - redis
 
+<<<<<<< HEAD
   # features-extractor — UiPath LangGraph agent (Ollama) over Dapr.
   features-extractor:
     build:
@@ -289,6 +298,8 @@ services:
       - develop-analysis
       - redis
 
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 volumes:
   pgdata:
   ollama_data:

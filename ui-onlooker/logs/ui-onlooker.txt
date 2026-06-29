@@ -1,0 +1,8 @@
+
+> ui-onlooker@0.1.0 start
+> next start
+
+▲ Next.js 16.2.7
+- Local:         http://localhost:3000
+- Network:       http://172.18.0.6:3000
+✓ Ready in 326ms

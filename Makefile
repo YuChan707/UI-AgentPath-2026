@@ -133,6 +133,7 @@ ui-logs: ## Tail ui-onlooker logs
 	$(COMPOSE) logs -f ui-onlooker
 
 ## ---------------------------------------------------------------- data ------
+<<<<<<< HEAD
 vendor-all: ## Re-vendor contracts/dtos into each container from canonical dtos/
 	$(MAKE) -C embeding_service vendor
 	$(MAKE) -C data_processor vendor
@@ -140,6 +141,10 @@ vendor-all: ## Re-vendor contracts/dtos into each container from canonical dtos/
 
 schema: check-env ## Apply init.sql to the Postgres DB via DATABASE_URL
 	$(PY) postgresql-db/apply_schema.py
+=======
+schema: check-env ## Apply init.sql to the Postgres DB via DATABASE_URL
+	$(PY) containers_env/postgresql-db/apply_schema.py
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 
 model-pull: ## Pull the Llama model into the ollama service
 	$(COMPOSE) exec ollama ollama pull $(MODEL)

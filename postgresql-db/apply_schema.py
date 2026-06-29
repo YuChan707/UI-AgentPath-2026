@@ -13,7 +13,11 @@ TLS is enabled for remote hosts and skipped for sqlite/local.
 Override TLS with DB_SSL=require|disable.
 
 Alternative (no Python): run
+<<<<<<< HEAD:postgresql-db/apply_schema.py
     psql "$DATABASE_URL" -f postgresql-db/init.sql
+=======
+    psql "$DATABASE_URL" -f containers_env/postgresql-db/init.sql
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure):containers_env/postgresql-db/apply_schema.py
 """
 
 from __future__ import annotations

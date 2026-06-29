@@ -16,11 +16,19 @@ from __future__ import annotations
 
 import logging
 
+<<<<<<< HEAD
 import db
 import embed
 from contracts import CollectionReady, DocumentUploaded, ServiceProgress
 from dapr_io import publish
 from extract import pages
+=======
+from dtos.messages import CollectionReady, DocumentUploaded, ServiceProgress
+
+from . import db, embed
+from .dapr_io import publish
+from .extract import pages
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 
 logger = logging.getLogger("embeding-service")
 

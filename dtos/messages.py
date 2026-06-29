@@ -70,6 +70,7 @@ class InsightSelection(BaseModel):
     general_report: bool = False
 
 
+<<<<<<< HEAD
 class FeaturesReady(BaseModel):
     """features-extractor -> audience-settings. Features persisted in products.features."""
 
@@ -93,6 +94,8 @@ class AnalysisReady(BaseModel):
     insights: list[str] = []
 
 
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 __all__ = [
     "ACCEPTED_DOC_TYPES",
     "DocumentUploaded",
@@ -100,7 +103,10 @@ __all__ = [
     "CollectionReady",
     "AudienceSettings",
     "InsightSelection",
+<<<<<<< HEAD
     "FeaturesReady",
     "AudienceReady",
     "AnalysisReady",
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 ]

@@ -200,14 +200,20 @@ CREATE TABLE IF NOT EXISTS products (
     document_name  text NOT NULL,
     doc_type       text NOT NULL,                      -- file extension: txt|md|pdf|pptx|docx
     content        bytea,                              -- raw uploaded file bytes
+<<<<<<< HEAD:postgresql-db/init.sql
     features       jsonb,                              -- [{feature_id, name, description}] (features-extractor)
     collection     text,                               -- chroma collection name (embeding-service)
     settings       jsonb,                              -- AudienceSettings (from the UI)
     insights       jsonb,                              -- InsightSelection (from the UI)
+=======
+    features       jsonb,                              -- {feature_id: {description}} (features-extractor)
+    collection     text,                               -- chroma collection name (embeding-service)
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure):containers_env/postgresql-db/init.sql
     status         text NOT NULL DEFAULT 'uploaded',   -- uploaded|embedding|embedded|extracting|reacting|analyzed
     date_upload    timestamptz NOT NULL DEFAULT now()
 );
 
+<<<<<<< HEAD:postgresql-db/init.sql
 -- One reaction per (audience group x feature), produced by audience-settings.
 CREATE TABLE IF NOT EXISTS audience_responses (
     id                     bigserial PRIMARY KEY,
@@ -237,6 +243,8 @@ CREATE TABLE IF NOT EXISTS product_analysis (
     created_at             timestamptz NOT NULL DEFAULT now()
 );
 
+=======
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure):containers_env/postgresql-db/init.sql
 -- ============================================================================
 -- BACKEND OPERATIONAL TABLES (mirror backend/models/database.py; init_db()
 -- also creates these via SQLAlchemy — both paths are idempotent).

@@ -1,0 +1,5 @@
+2026-06-29 15:46:40,797 WARNING DataProcessor: No persisted locations. Run the data_ingestor first (python -m data_ingestor.main) to populate data_ingestor/data/locations/.
+2026-06-29 16:09:21,928 WARNING DataProcessor: No persisted locations. Run the data_ingestor first (python -m data_ingestor.main) to populate data_ingestor/data/locations/.
+2026-06-29 16:58:59,247 WARNING DataProcessor: No persisted locations. Run the data_ingestor first (python -m data_ingestor.main) to populate data_ingestor/data/locations/.
+2026-06-29 17:02:15,572 WARNING DataProcessor: No persisted locations. Run the data_ingestor first (python -m data_ingestor.main) to populate data_ingestor/data/locations/.
+2026-06-29 17:22:20,649 WARNING DataProcessor: No persisted locations. Run the data_ingestor first (python -m data_ingestor.main) to populate data_ingestor/data/locations/.

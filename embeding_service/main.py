@@ -4,11 +4,18 @@ Subscribes to ``document.uploaded`` and runs the embedding pipeline. The UI
 publishes the event; this service does the heavy lifting (extraction +
 embeddings + Chroma) and reports progress back over Dapr.
 
+<<<<<<< HEAD
 Run with a Dapr sidecar (from this folder):
     export REDIS_HOST=localhost:6379
     dapr run --app-id embeding-service --app-port 8100 \
         --resources-path components \
         -- uvicorn main:app --host 0.0.0.0 --port 8100
+=======
+Run with a Dapr sidecar:
+    dapr run --app-id embeding-service --app-port 8100 \
+        --resources-path embeding_service/components \
+        -- uvicorn embeding_service.main:app --host 0.0.0.0 --port 8100
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 """
 
 from __future__ import annotations
@@ -18,8 +25,14 @@ import os
 
 from fastapi import FastAPI, Request
 
+<<<<<<< HEAD
 import pipeline
 from contracts import DocumentUploaded
+=======
+from dtos.messages import DocumentUploaded
+
+from . import pipeline
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 

@@ -54,6 +54,103 @@ Shared infra: **PostgreSQL** (entities + documents), **ChromaDB** (vectors),
 
 ## Run
 
+<<<<<<< HEAD
+=======
+---
+
+## Folder structure
+
+```
+AGENTS-LEAGUE-HACKATHON-2026/
+│
+├── .env                              ← secrets (never commit)
+├── .env.example                      ← safe template with placeholders
+├── requirements.txt                  ← Python dependencies
+├── onlooker.db                       ← SQLite dev database (auto-created)
+│
+├── backend/                          ← FastAPI application
+│   ├── main.py                       ← app entry point, router registration
+│   ├── database.py                   ← async engine setup
+│   │
+│   ├── agents/                       ← AI agent implementations
+│   │   ├── orchestrator.py           ← fans out to all agents in parallel
+│   │   ├── speech.py                 ← pace / filler words / clarity (no LLM)
+│   │   ├── audience.py               ← Llama persona reactions
+│   │   ├── coaching.py               ← Llama live coaching tips
+│   │   ├── cultural.py               ← ChromaDB RAG + Llama cultural flags
+│   │   └── vision.py                 ← Llama 4 Scout screen-frame analysis
+│   │
+│   ├── routes/                       ← API route handlers
+│   │   ├── health.py                 ← GET /health
+│   │   ├── session.py                ← session CRUD + report generation
+│   │   ├── stream.py                 ← WebSocket /ws/stream (Alive mode)
+│   │   ├── analyze.py                ← POST /analyze/chunk (Chat Box)
+│   │   └── document.py               ← POST /document/upload
+│   │
+│   ├── services/                     ← shared service layer
+│   │   ├── chroma_service.py         ← ChromaDB seed + cosine query
+│   │   ├── document_service.py       ← PPTX / DOCX / PDF text extraction
+│   │   ├── ingestion_service.py      ← event + analytics persistence
+│   │   ├── pptx_generator.py         ← branded PPTX report builder
+│   │   └── email_service.py          ← follow-up email draft (Llama)
+│   │
+│   └── models/
+│       └── database.py               ← SQLAlchemy async ORM models
+│
+├── ui-onlooker/                      ← Next.js frontend
+│   ├── app/
+│   │   ├── page.tsx                  ← root page: Dashboard / Analysis views
+│   │   ├── layout.tsx                ← global fonts + providers
+│   │   └── globals.css               ← design tokens + Tailwind base
+│   │
+│   ├── components/
+│   │   ├── AliveModeView.tsx         ← screen share, REC timer, video AI feed
+│   │   ├── ChatBoxMode.tsx           ← document upload + AI chat interface
+│   │   ├── DashboardView.tsx         ← analytics / engagement visualizer
+│   │   ├── ProjectSettings.tsx       ← audience context form → POST /session/start
+│   │   ├── AnalysisGraphPanel.tsx    ← analysis graph visualizer
+│   │   ├── DocumentsPanel.tsx        ← uploaded documents panel
+│   │   ├── FeedbackFeed.tsx          ← multi-perspective feedback feed
+│   │   └── ui/                       ← shadcn/ui primitives
+│   │       ├── badge.tsx
+│   │       ├── button.tsx
+│   │       ├── card.tsx
+│   │       ├── progress.tsx
+│   │       └── select.tsx
+│   │
+│   ├── lib/
+│   │   ├── store.ts                  ← Zustand store (session, events, metrics)
+│   │   ├── useWebSocket.ts           ← singleton WS hook (connect / sendFrame)
+│   │   └── utils.ts                  ← cn() and shared helpers
+│
+├── dtos/                             ← shared Pydantic DTOs
+│   ├── analytics.py
+│   ├── audience.py
+│   ├── reports.py
+│   ├── data_ingestors.py
+│   └── data_processors.py
+│
+├── data_processor/                   ← Data Commons fetch + profile builder
+│   ├── fetch_data_commons.py
+│   └── build_profiles.py
+│
+├── data_ingestor/                    ← one-time DB seed script
+│   └── seed_database.py
+│
+└── containers_env/                   ← Docker Compose (optional for prod)
+    ├── embeds-db/                    ← ChromaDB container config
+    └── postgresql-db/                ← PostgreSQL container config
+```
+
+---
+
+# Quick Start Guide - Feedback Agent
+
+## 🚀 Getting Started in 5 Minutes
+
+### Step 1: Verify Installation
+Ensure all dependencies are installed:
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 ```bash
 cp .env.example .env          # fill in CENSUS_DATA_API; LLM is local Ollama
 

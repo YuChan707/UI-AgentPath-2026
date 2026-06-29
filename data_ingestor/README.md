@@ -12,6 +12,10 @@ It is the entry point of the pipeline: it produces the real data on which the
 | Path | What it is |
 |---|---|
 | `main.py` | Downloads ACS5 (2 requests for all ZCTAs), builds `LocationEntity` and `persist_locations()` one JSON per zip |
+<<<<<<< HEAD
+=======
+| `seed_database.py` | Seeds the generated profiles into the database (used by docker-compose) |
+>>>>>>> 15f913d (cleaning and restructuring to microservices infrastructure)
 | `dtos/` | Local copy of the entities (self-contained service) |
 | `data/nyc_zip_codes.csv` | Input: NY zip codes |
 | `components/` | Dapr: `pubsub.yaml` (redis) + `statestore.yaml` (Postgres, persistence in DB) |
