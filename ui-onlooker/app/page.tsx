@@ -175,7 +175,7 @@ export default function Home() {
             <h2 className="text-xl text-gray-700">Configure Your Audience</h2>
             <p className="mb-4 text-xs text-gray-400">Keep in mind that this is the audience you want to attract to your project; this is your audience&apos;s profile.</p>
             <div className="rounded-2xl border border-gray-200 bg-white p-6">
-              <div className="grid grid-cols-1 gap-x-10 md:grid-cols-2 md:divide-x md:divide-gray-100">
+              <div className="grid grid-cols-1 gap-x-8 md:grid-cols-[1.25fr_0.85fr] md:divide-x md:divide-gray-100">
                 {/* col 1 */}
                 <div className="md:pr-8">
                   <Field label="Type of Audience">
@@ -191,20 +191,6 @@ export default function Home() {
                   <Field label="Area (Optional) — New York City">
                     <AreaMap onChange={setArea} />
                   </Field>
-
-                  <p className="mt-2 mb-2 text-sm text-gray-500">Select Format</p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {([
-                      { id: "dashboard", Icon: LayoutDashboard, title: "Dashboard", desc: "See the scores and feature scores given by the audience to your service." },
-                      { id: "chat", Icon: MessageSquare, title: "Chat", desc: "The audience is a chatbot you can interact with and ask specific questions." },
-                    ] as const).map(({ id, Icon, title, desc }) => (
-                      <button key={id} onClick={() => setFormat(id)}
-                        className={`rounded-xl border p-3 text-left transition ${format === id ? "border-[#0078d4] bg-[#0078d4]/5" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}>
-                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Icon size={16} /> {title}</div>
-                        <p className="mt-1 text-xs text-gray-400">{desc}</p>
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* col 2 */}
@@ -232,6 +218,26 @@ export default function Home() {
                     <input type="range" min={0} max={100} value={maxAge}
                       onChange={(e) => setMaxAge(Math.max(+e.target.value, minAge))} />
                   </div>
+                </div>
+              </div>
+
+              {/* Row 2: Select Format (full width) */}
+              <div className="mt-6 border-t border-gray-100 pt-5">
+                <p className="mb-3 text-sm text-gray-500">Select Format</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {([
+                    { id: "dashboard", Icon: LayoutDashboard, title: "Dashboard", desc: "See the scores and feature ratings the audience gives your service." },
+                    { id: "chat", Icon: MessageSquare, title: "Chat", desc: "The audience becomes a chatbot you can interact with and ask specific questions." },
+                  ] as const).map(({ id, Icon, title, desc }) => (
+                    <button key={id} onClick={() => setFormat(id)}
+                      className={`flex items-start gap-3 rounded-xl border p-4 text-left transition ${format === id ? "border-[#0078d4] bg-[#0078d4]/5 ring-1 ring-[#0078d4]/30" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}>
+                      <Icon size={18} className="mt-0.5 shrink-0 text-gray-500" />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-700">{title}</span>
+                        <span className="mt-1 block text-xs leading-snug text-gray-400">{desc}</span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
